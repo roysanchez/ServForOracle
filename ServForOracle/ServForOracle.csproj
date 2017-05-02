@@ -1,7 +1,67 @@
-<Project Sdk="Microsoft.NET.Sdk">
-
+﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>netstandard1.4</TargetFramework>
+    <TargetFramework>net461</TargetFramework>
+    <PackageId>ServForOracle</PackageId>
+    <PackageVersion>3.1.0</PackageVersion>
+    <Version>3.1.0</Version>
+    <Title>Oracle Package and Type wrapper for .NET</Title>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <Authors>Roy Sánchez</Authors>
+    <Description>A wrapper over Oracle ODP.NET to make easier the calls to packages and the use of UDTs (User Define Types)</Description>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+    <Copyright>Copyright 2016 (c) Roy Sanchez. All rights reserved.</Copyright>
   </PropertyGroup>
-
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CSharp" Version="4.3.0" />
+    <PackageReference Include="Oracle.DataAccess" Version="4.112.4.0">
+      <ExcludeAssets>All</ExcludeAssets>
+    </PackageReference>
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="..\OracleDlls\x64\Oracle.DataAccess.dll">
+      <PackagePath>lib\net461\x64\Oracle.DataAccess.dll</PackagePath>
+    </Content>
+    <Content Include="..\OracleDlls\x64\oraociei11.dll">
+      <PackagePath>build\x64\oraociei11.dll</PackagePath>
+    </Content>
+    <Content Include="..\OracleDlls\x64\OraOps11w.dll">
+      <PackagePath>build\x64\OraOps11w.dll</PackagePath>
+    </Content>
+    <Content Include="..\OracleDlls\x64\oci.dll">
+      <PackagePath>build\x64\oci.dll</PackagePath>
+    </Content>
+    <Content Include="..\OracleDlls\x86\Oracle.DataAccess.dll">
+      <PackagePath>lib\net461\x86\Oracle.DataAccess.dll</PackagePath>
+    </Content>
+    <Content Include="..\OracleDlls\x86\oraociei11.dll">
+      <PackagePath>build\x86\oraociei11.dll</PackagePath>
+    </Content>
+    <Content Include="..\OracleDlls\x86\OraOps11w.dll">
+      <PackagePath>build\x86\OraOps11w.dll</PackagePath>
+    </Content>
+    <Content Include="..\OracleDlls\x86\oci.dll">
+      <PackagePath>build\x86\oci.dll</PackagePath>
+    </Content>
+    <Content Include="build\ServForOracle.targets">
+      <PackagePath>build\ServForOracle.targets</PackagePath>
+    </Content>
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="Oracle.DataAccess" Condition="$(Platform) == 'x64'">
+      <HintPath>..\OracleDlls\x64\Oracle.DataAccess.dll</HintPath>
+    </Reference>
+    <Reference Include="Oracle.DataAccess" Condition="($(Platform) == 'AnyCPU' OR $(Platform) == 'x86')">
+      <HintPath>..\OracleDlls\x86\Oracle.DataAccess.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+  <Target Name="CopyODP" AfterTargets="Build">
+    <Message Text="Copying Oracle's ODP.NET DLLs to the output directory" Importance="high" />
+    <ItemGroup Condition="($(Platform) == 'AnyCPU' OR $(Platform) == 'x86')">
+      <_OracleDlls Include="$(SolutionDir)\OracleDlls\x86\*.*" />
+    </ItemGroup>
+    <ItemGroup Condition="$(Platform) == 'x64'">
+      <_OracleDlls Include="$(SolutionDir)\OracleDlls\x64\*.*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_OracleDlls)" DestinationFolder="$(OutputPath)" />
+  </Target>
 </Project>

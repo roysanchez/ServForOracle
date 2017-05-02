@@ -1,0 +1,36 @@
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Target Name="PlatformCheck" BeforeTargets="InjectReference"
+   Condition="'$(Platform)' != 'x86' AND '$(Platform)' != 'x64'">
+    <Error Text="$(MSBuildThisFileName) does not work correctly on '$(Platform)' platform. You need to specify platform (x86 or x64)." />
+  </Target>
+  <ItemGroup Condition="$(Platform) == 'x64'">
+    <None Include="$(MSBuildThisFileDirectory)x64\oci.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="$(MSBuildThisFileDirectory)x64\oraociei11.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="$(MSBuildThisFileDirectory)x64\OraOps11w.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+  <ItemGroup Condition="$(Platform) == 'x86'">
+    <None Include="$(MSBuildThisFileDirectory)x86\oci.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="$(MSBuildThisFileDirectory)x86\oraociei11.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="$(MSBuildThisFileDirectory)x86\OraOps11w.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="Oracle.DataAccess" Condition="$(Platform) == 'x64'">
+      <HintPath>$(MSBuildThisFileDirectory)..\lib\net461\x64\Oracle.DataAccess.dll</HintPath>
+    </Reference>
+    <Reference Include="Oracle.DataAccess" Condition="$(Platform) == 'x86'">
+      <HintPath>$(MSBuildThisFileDirectory)..\lib\net461\x86\Oracle.DataAccess.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+</Project>
