@@ -2,12 +2,12 @@
   <PropertyGroup>
     <TargetFramework>net461</TargetFramework>
     <PackageId>ServForOracle</PackageId>
-    <PackageVersion>3.1.0</PackageVersion>
-    <Version>3.1.0</Version>
+    <PackageVersion>3.3.0</PackageVersion>
+    <Version>3.3.0</Version>
     <Title>Oracle Package and Type wrapper for .NET</Title>
     <PlatformTarget>AnyCPU</PlatformTarget>
     <Authors>Roy Sánchez</Authors>
-    <Description>A wrapper over Oracle ODP.NET to make easier the calls to packages and the use of UDTs (User Define Types)</Description>
+    <Description>A wrapper over Oracle native ODP.NET to make easier the calls to packages and the use of UDTs (User Define Types)</Description>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
     <Copyright>Copyright 2016 (c) Roy Sanchez. All rights reserved.</Copyright>
   </PropertyGroup>
@@ -17,7 +17,7 @@
       <ExcludeAssets>All</ExcludeAssets>
     </PackageReference>
   </ItemGroup>
-  <ItemGroup>
+  <!--<ItemGroup>
     <Content Include="..\OracleDlls\x64\Oracle.DataAccess.dll">
       <PackagePath>lib\net461\x64\Oracle.DataAccess.dll</PackagePath>
     </Content>
@@ -45,7 +45,7 @@
     <Content Include="build\ServForOracle.targets">
       <PackagePath>build\ServForOracle.targets</PackagePath>
     </Content>
-  </ItemGroup>
+  </ItemGroup>-->
   <ItemGroup>
     <Reference Include="Oracle.DataAccess" Condition="$(Platform) == 'x64'">
       <HintPath>..\OracleDlls\x64\Oracle.DataAccess.dll</HintPath>
