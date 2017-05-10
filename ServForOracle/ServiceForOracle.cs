@@ -10,12 +10,14 @@ using System.Data.Common;
 using System.Runtime;
 using System.Reflection;
 using ServForOracle.Internal;
+using System.IO;
+using ServForOracle.Tools;
 
 namespace ServForOracle
 {
-    public abstract class OracleBaseService
+    public abstract class ServiceForOracle
     {
-        public OracleBaseService(IConnectionStringProvider connectionString)
+        public ServiceForOracle(IConnectionStringProvider connectionString)
         {
             ConnectionString = connectionString.Value;
         }
@@ -29,11 +31,11 @@ namespace ServForOracle
 
             OracleConnection con = new OracleConnection(ConnectionString);
 
-            await con.OpenAsync();
+            await con.OpenAsync().ConfigureAwait(false);
             var cmd = con.CreateCommand();
             cmd.CommandType = type;
             cmd.CommandText = proc.Replace("\r\n", "\n");
-            
+
             cmd.Disposed += (object sender, EventArgs e) =>
             {
                 con.Close();
@@ -42,11 +44,16 @@ namespace ServForOracle
             return cmd;
         }
 
-        protected async Task ExecuteQueryAsync(string query)
+        /// <summary>
+        /// Executes the DDL specified
+        /// </summary>
+        /// <param name="ddl">The DDL to execute</param>
+        /// <returns>A task indicating he result of the execution</returns>
+        protected async Task ExecuteDDLAsync(string ddl)
         {
-            using (var cmd = await CreateCommandAsync(query, CommandType.Text))
+            using (var cmd = await CreateCommandAsync(ddl, CommandType.Text).ConfigureAwait(false))
             {
-                await cmd.ExecuteNonQueryAsync();
+                await cmd.ExecuteNonQueryAsync().ConfigureAwait(false);
             }
         }
 
@@ -60,14 +67,22 @@ namespace ServForOracle
         /// <returns>A task indicating the result of the execution and containing the return value if it is successful</returns>
         protected async Task<T> ExecuteFunctionAsync<T>(string function, params Param[] parameters)
         {
-            using (var cmd = await CreateCommandAsync(function, CommandType.StoredProcedure))
+            using (var cmd = await CreateCommandAsync(function, CommandType.StoredProcedure).ConfigureAwait(false))
             {
                 var ret = ParamHandler.CreateReturnParam<T>();
                 cmd.Parameters.Add(ret);
-                
-                await ExecuteInnerAsync(cmd, parameters);
 
-                return ParamHandler.ConvertOracleParameterToBaseType<T>(ret);
+                await ExecuteInnerAsync(cmd, parameters).ConfigureAwait(false);
+
+                try
+                {
+                    return ParamHandler.ConvertOracleParameterToBaseType<T>(ret);
+                }
+                catch (Exception ex)
+                {
+                    throw new Exception($"Error converting the return value to type {typeof(T).Name} " +
+                        $"in function {function}. See inner exception for details", ex);
+                }
             }
         }
 
@@ -80,9 +95,16 @@ namespace ServForOracle
         /// <returns>A task indicating the result of the execution</returns>
         protected async Task ExecuteProcedureAsync(string procedure, params Param[] parameters)
         {
-            using (var cmd = await CreateCommandAsync(procedure, CommandType.StoredProcedure))
+            using (var cmd = await CreateCommandAsync(procedure, CommandType.StoredProcedure).ConfigureAwait(false))
             {
-                await ExecuteInnerAsync(cmd, parameters);
+                try
+                {
+                    await ExecuteInnerAsync(cmd, parameters).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    throw new Exception($"Error executing {cmd.CommandText}. See inner exception for details.", ex);
+                }
             }
         }
 
@@ -103,11 +125,28 @@ namespace ServForOracle
                 if (oracleParam.Direction == ParameterDirection.Output || oracleParam.Direction == ParameterDirection.InputOutput)
                     outParameters.Add(new OutParam(param, oracleParam));
             }
-            
-            await cmd.ExecuteNonQueryAsync();
-            
+
+            try
+            {
+                await cmd.ExecuteNonQueryAsync().ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Error executing {cmd.CommandText}. See inner exception for details.", ex);
+            }
+
             foreach (var param in outParameters)
                 param.SetParamValue();
+        }
+        
+        /// <summary>
+        /// Loads the Oracle.DataAccess library in case it couldn't use the default version
+        /// </summary>
+        /// <remarks>stackoverflow.com/questions/277817/compile-a-version-agnostic-dll-in-net</remarks>
+        static ServiceForOracle()
+        {
+            AppDomain.CurrentDomain.AssemblyResolve += Util.LoadOracleAssembly;
+            AppDomain.CurrentDomain.ProcessExit += Util.CloseOracleConnectionPool;
         }
     }
 }

@@ -15,9 +15,8 @@ namespace ServForOracle.Internal
         {
             ServiceParameter = param;
             OutParameter = oracleParameter;
-
-
         }
+
         public Param ServiceParameter { get; set; }
         public OracleParameter OutParameter { get; set; }
 
@@ -26,8 +25,19 @@ namespace ServForOracle.Internal
 
         public void SetParamValue()
         {
-            var converter = ConverterBase.MakeGenericMethod(ServiceParameter.Type);
-            ServiceParameter.Value = converter.Invoke(null, new[] { OutParameter });
+            try
+            {
+                var converter = ConverterBase.MakeGenericMethod(ServiceParameter.Type);
+                ServiceParameter.Value = converter.Invoke(null, new[] { OutParameter });
+            }
+            catch (Exception ex)
+            {
+                throw new Exception(
+                    $"Error trying to set value for type {ServiceParameter.Type.Name} " +
+                    $"with direction {ServiceParameter.ParamDirection}. " +
+                    "See inner exception for details",
+                    ex);
+            }
         }
     }
 }

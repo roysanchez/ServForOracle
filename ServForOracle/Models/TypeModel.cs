@@ -36,6 +36,7 @@ namespace ServForOracle.Models
                 OracleUdt.SetValue(con, pUdt, attr.AttributeName, prop.GetValue(this));
             });
         }
+
         public void ToCustomObject(OracleConnection con, IntPtr pUdt)
         {
             ProcessProperties((prop, attr) =>

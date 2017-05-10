@@ -12,8 +12,7 @@ namespace ServForOracle.Models
     {
         public IOracleCustomType CreateObject()
         {
-            var x = Activator.CreateInstance(this.GetType()) as IOracleCustomType;
-            return x;
+            return Activator.CreateInstance(this.GetType()) as IOracleCustomType;
         }
 
         public static Object Null

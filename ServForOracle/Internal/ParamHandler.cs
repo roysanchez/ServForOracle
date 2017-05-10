@@ -1,9 +1,11 @@
 ﻿using Oracle.DataAccess.Client;
 using Oracle.DataAccess.Types;
+using ServForOracle.Models;
 using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -11,11 +13,102 @@ namespace ServForOracle.Internal
 {
     internal static class ParamHandler
     {
+        public static Dictionary<Type, string> Models { get; }
+        /// <summary>
+        /// Read-Only dictionary with all the collections types for the OracleDB.
+        /// The Key is the Type with the Oracle Array Attribute or their collectionType.
+        /// The Value is the Oracle Type description.
+        /// </summary>
+        public static Dictionary<Type, string> Collections { get; }
+
+        //TODO Move the message to a resource
+        public static string InvalidClassMessage { get; }
+            = "The type {0} doesn't conform with the guidelines for objects or collections. "
+                + "Please see the documentation on how to use this library.";
+
+        static ParamHandler()
+        {
+            var executing = Assembly.GetExecutingAssembly();
+
+            var assemblies =
+                    from assembly in AppDomain.CurrentDomain.GetAssemblies()
+                    where assembly != executing
+                       && !assembly.GlobalAssemblyCache
+                       //&& assembly.Location == executing.Location
+                       && !assembly.FullName.StartsWith("Microsoft")
+                       && !assembly.FullName.StartsWith("System")
+                       && !assembly.FullName.StartsWith("Oracle")
+                       && !assembly.FullName.StartsWith("xunit")
+                    select assembly;
+
+            var types = assemblies.SelectMany(a => a.GetTypes())
+                        .Where(t => t.IsClass && !t.IsSealed && !t.IsAbstract);
+
+            Models = types.Where(t => t.IsSubclassOf(typeof(TypeModel)))
+                        .ToDictionary(t => t, t => GetOracleTypeNameFromAttribute(t));
+
+
+            var tempCol = types
+                .Where(t => IsCollectionType(t.BaseType))
+                .ToDictionary(t => t, t => GetOracleTypeNameFromAttribute(t));
+
+            Collections = new Dictionary<Type, string>(tempCol);
+
+            //Creates the IEnumerable<Type> for arrays
+            foreach (var keyValue in tempCol)
+            {
+                var generic = typeof(IEnumerable<>).MakeGenericType(keyValue.Key.BaseType.GetGenericArguments()[0]);
+                Collections.Add(generic, keyValue.Value);
+            }
+        }
+
+        private static bool IsCollectionType(Type type)
+        {
+            if (type == null) return false;
+            return type.IsGenericType && type.GetGenericTypeDefinition() == typeof(CollectionModel<>);
+        }
+
+
+        private static bool TryGetCollectionKeyValue(Type t, out string value)
+        {
+            value = Collections
+                        .Where(c => c.Key.IsAssignableFrom(t))
+                        .Select(c => c.Value)
+                        .FirstOrDefault();
+
+            return !string.IsNullOrEmpty(value);
+        }
+
+        public static bool IsValidParameterType(Type type)
+        {
+            if (type.IsValueType
+                || type == typeof(string)
+                || Models.Any(c => c.Key == type)
+                || TryGetCollectionKeyValue(type, out var collectionValue)
+                )
+                return true;
+
+            return false;
+        }
+
+        /// <summary>
+        /// Creates an oracle parameter as a return value
+        /// </summary>
+        /// <typeparam name="T">The type spected to be returned by the function</typeparam>
+        /// <returns>An OracleParameter configured for the return of the specified type</returns>
         public static OracleParameter CreateReturnParam<T>()
         {
             return CreateParam(typeof(T), null, ParameterDirection.ReturnValue);
         }
 
+        /// <summary>
+        /// Create an OracleParameter with the specfied information
+        /// </summary>
+        /// <typeparam name="T">The type of the oracle parameter value</typeparam>
+        /// <param name="type">The type that the value represents (in case the value is null)</param>
+        /// <param name="value">The value to send</param>
+        /// <param name="paramType">The direction of the parameter (IN, OUT, INOUT)</param>
+        /// <returns>Returns an OracleParameter with the data specified.</returns>
         public static OracleParameter CreateParam<T>(Type type, T value, ParamDirection paramType)
         {
             var paramDirection = ParameterDirection.Input;
@@ -65,30 +158,38 @@ namespace ServForOracle.Internal
             }
             else
             {
-                var attrCustomType = (from attr in type.GetCustomAttributes(false)
-                                      where attr.GetType() == typeof(OracleCustomTypeMappingAttribute)
-                                      select attr as OracleCustomTypeMappingAttribute
-                                     ).FirstOrDefault();
-
-                var attrArray = (from prop in type.GetProperties()
-                                 from attr in prop.GetCustomAttributes(true)
-                                 where attr.GetType() == typeof(OracleArrayMappingAttribute)
-                                 select attr as OracleArrayMappingAttribute
-                                ).FirstOrDefault();
-
-                if (attrArray != null)
+                if (Models.TryGetValue(type, out var modelValue))
                 {
+                    param.UdtTypeName = modelValue;
+                    param.OracleDbType = OracleDbType.Object;
+                }
+                else if (TryGetCollectionKeyValue(type, out var collectionValue))
+                {
+                    param.UdtTypeName = collectionValue;
                     param.OracleDbType = OracleDbType.Array;
                 }
                 else
-                    param.OracleDbType = OracleDbType.Object;
-
-                param.UdtTypeName = attrCustomType.UdtTypeName;
+                    throw new Exception(string.Format(InvalidClassMessage, type.Name));
             }
 
             param.Direction = direction;
             param.Value = _value;
             return param;
+        }
+
+        private static string GetOracleTypeNameFromAttribute(Type type)
+        {
+            //TODO throw exception when null
+            //TODO never return null
+            if (type == null) return null;
+
+            var oracleAttribute = (
+                    from attr in type.GetCustomAttributes(false)
+                    where attr.GetType() == typeof(OracleCustomTypeMappingAttribute)
+                    select attr as OracleCustomTypeMappingAttribute
+                ).FirstOrDefault();
+
+            return oracleAttribute?.UdtTypeName;
         }
 
         /// <summary>
@@ -115,7 +216,7 @@ namespace ServForOracle.Internal
         private static object extractValue(dynamic param)
         {
             if (!(param is Oracle.DataAccess.Types.INullable))
-                throw new InvalidCastException($"Can't use {nameof(extractValue)} for type ");
+                throw new InvalidCastException($"Can't use {nameof(extractValue)} for type ${param.GetType().Name}");
 
             if (param.IsNull)
                 return null;
@@ -138,9 +239,19 @@ namespace ServForOracle.Internal
 
             //This will handle Models.TypeModel and any other that don't require casting
             if (type == retType)
-                return (T)oracleParam.Value;
+            {
+                //Check if property IsNull exists
+                if (type.GetProperty("IsNull") != null)
+                {
+                    dynamic val = oracleParam.Value;
+                    if (val.IsNull)
+                        return default(T);
+                }
 
-            bool isNullable = (retType.IsGenericType && retType.GetGenericTypeDefinition() == typeof(Nullable));
+                return (T)oracleParam.Value;
+            }
+
+            bool isNullable = (retType.IsGenericType && retType.GetGenericTypeDefinition() == typeof(Nullable<>));
 
             object value = default(T);
 
@@ -213,22 +324,14 @@ namespace ServForOracle.Internal
                     extractNullableValue(timestampTZ, isNullable);
                     break;
                 default:
-                    if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Models.CollectionModel<>))
+                    if (TryGetCollectionKeyValue(retType, out var oracleType))
                     {
-                        var collectionArgumentType = type.GetGenericArguments()[0]; //Qoute
-                        var collectionType = typeof(IEnumerable<>).MakeGenericType(collectionArgumentType); //IEnumerable<Quote>
-
-                        if (collectionType.IsAssignableFrom(retType))
-                        {
-                            dynamic temp = oracleParam.Value;
-                            value = temp.Array;
-                        }
-                        else
-                            throw new InvalidCastException($"Can't cast type {retType.Name} to " +
-                                $"IEnumerable of {collectionArgumentType.Name}");
+                        dynamic temp = oracleParam.Value;
+                        value = temp.Array;
                     }
                     else
-                        throw new InvalidCastException($"Can't cast type {retType.Name} to {type.Name}");
+                        throw new InvalidCastException($"Can't cast type {type.Name} to {retType.Name} " +
+                            $"for oracle type ${oracleType}");
                     break;
             }
 

@@ -1,4 +1,5 @@
-﻿using System;
+﻿using ServForOracle.Internal;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -24,17 +25,15 @@ namespace ServForOracle
 
         public static Param Create<T>(ParamDirection direction, T value)
         {
-            return new Param(direction, typeof(T), value);
+            var type = typeof(T);
+            if (!ParamHandler.IsValidParameterType(type))
+                throw new ArgumentException(string.Format(ParamHandler.InvalidClassMessage, type.Name));
+
+            return new Param(direction, type, value);
         }
 
-        public static Param Input<T>(T value = default(T))
-        {
-            return new Param(ParamDirection.Input, typeof(T), value);
-        }
+        public static Param Input<T>(T value = default(T)) => Create(ParamDirection.Input, value);
 
-        public static Param Output<T>(T value = default(T))
-        {
-            return new Param(ParamDirection.Output, typeof(T), value);
-        }
+        public static Param Output<T>(T value = default(T)) => Create(ParamDirection.Output, value);
     }
 }
