@@ -13,6 +13,7 @@ namespace ServForOracle.Internal
 {
     internal static class ParamHandler
     {
+        private const int VARCHAR_MAX_SIZE = 32000;
         public static Dictionary<Type, string> Models { get; }
         /// <summary>
         /// Read-Only dictionary with all the collections types for the OracleDB.
@@ -98,19 +99,37 @@ namespace ServForOracle.Internal
         /// <returns>An OracleParameter configured for the return of the specified type</returns>
         public static OracleParameter CreateReturnParam<T>()
         {
-            return CreateParam(typeof(T), null, ParameterDirection.ReturnValue);
+            return CreateOracleParam(typeof(T), null, ParameterDirection.ReturnValue);
         }
 
         /// <summary>
-        /// Create an OracleParameter with the specfied information
+        /// Creates an OracleParameter with the specfied information
+        /// </summary>
+        /// <param name="parameter">The Param to transform into an OracleParameter object</param>
+        /// <returns></returns>
+        public static OracleParameter CreateOracleParam(Param parameter)
+        {
+            if (parameter == null)
+                throw new ArgumentNullException(nameof(parameter));
+
+            return CreateOracleParam(parameter.Type, parameter.Value, parameter.ParamDirection, parameter.OracleType);
+        }
+
+        /// <summary>
+        /// Creates an OracleParameter with the specfied information
         /// </summary>
         /// <typeparam name="T">The type of the oracle parameter value</typeparam>
         /// <param name="type">The type that the value represents (in case the value is null)</param>
         /// <param name="value">The value to send</param>
         /// <param name="paramType">The direction of the parameter (IN, OUT, INOUT)</param>
+        /// <param name="oracleType">In the case where the caller wants to set explicitly the type of the oracleDb to use</param>
         /// <returns>Returns an OracleParameter with the data specified.</returns>
-        public static OracleParameter CreateParam<T>(Type type, T value, ParamDirection paramType)
+        public static OracleParameter CreateOracleParam<T>(Type type, T value, ParamDirection paramType,
+                OracleDbType? oracleType = null)
         {
+            if (type == null)
+                throw new ArgumentNullException(nameof(type));
+
             var paramDirection = ParameterDirection.Input;
             switch (paramType)
             {
@@ -125,36 +144,84 @@ namespace ServForOracle.Internal
                     break;
             }
 
-            return CreateParam(type, value, paramDirection);
+            return CreateOracleParam(type, value, paramDirection, oracleType);
         }
 
-        private static OracleParameter CreateParam(Type type, object value, ParameterDirection direction)
+        private static OracleParameter CreateOracleParam(Type type, object value, ParameterDirection direction,
+            OracleDbType? oracleType = null)
         {
-            object _value = value;
             if (type == null)
                 throw new ArgumentNullException(nameof(type));
 
+            object _value = value;
+
             var param = new OracleParameter();
-            if (type.IsValueType)
+
+            if (oracleType.HasValue)
             {
+                param.OracleDbType = oracleType.Value;
+                if (param.OracleDbType == OracleDbType.Varchar2)
+                    param.Size = VARCHAR_MAX_SIZE;
+            }
+            else if (type.IsValueType)
+            {
+                if (type == typeof(char) || type == typeof(char?))
+                {
+                    param.OracleDbType = OracleDbType.Char;
+                }
+                if (type == typeof(sbyte) || type == typeof(sbyte?))
+                {
+                    param.OracleDbType = OracleDbType.Byte;
+                }
+                if (type == typeof(short) || type == typeof(short?)
+                    || type == typeof(byte) || type == typeof(byte?))
+                {
+                    param.OracleDbType = OracleDbType.Int16;
+                }
                 if (type == typeof(int) || type == typeof(int?))
                 {
                     param.OracleDbType = OracleDbType.Int32;
                 }
+                if (type == typeof(long) || type == typeof(long))
+                {
+                    param.OracleDbType = OracleDbType.Int64;
+                }
+                if (type == typeof(Single) || type == typeof(Single?)
+                    || type == typeof(float) || type == typeof(float?))
+                {
+                    param.OracleDbType = OracleDbType.Single;
+                }
                 else if (type == typeof(double) || type == typeof(double?))
                 {
                     param.OracleDbType = OracleDbType.Double;
+                }
+                else if (type == typeof(decimal) || type == typeof(decimal?))
+                {
+                    param.OracleDbType = OracleDbType.Decimal;
                 }
                 else if (type == typeof(DateTime) || type == typeof(DateTime?))
                 {
                     param.OracleDbType = OracleDbType.Date;
                 }
             }
+            else if (type.IsArray)
+            {
+                if (type == typeof(byte[]))
+                {
+                    param.OracleDbType = OracleDbType.Blob;
+                }
+            }
             else if (type == typeof(string))
             {
                 param.OracleDbType = OracleDbType.Varchar2;
                 if (direction != ParameterDirection.Input)
-                    param.Size = 32000;
+                    param.Size = VARCHAR_MAX_SIZE;
+
+                if (_value != null && _value is string str && str.Length > VARCHAR_MAX_SIZE)
+                {
+                    param.OracleDbType = OracleDbType.Clob;
+                    param.Size = default(int);
+                }
             }
             else
             {

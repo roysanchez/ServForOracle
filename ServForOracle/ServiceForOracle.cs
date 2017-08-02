@@ -119,7 +119,7 @@ namespace ServForOracle
             var outParameters = new List<OutParam>();
             foreach (var param in parameters)
             {
-                var oracleParam = ParamHandler.CreateParam(param.Type, param.Value, param.ParamDirection);
+                var oracleParam = ParamHandler.CreateOracleParam(param);
                 cmd.Parameters.Add(oracleParam);
 
                 if (oracleParam.Direction == ParameterDirection.Output || oracleParam.Direction == ParameterDirection.InputOutput)
