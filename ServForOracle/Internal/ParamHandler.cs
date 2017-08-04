@@ -24,8 +24,12 @@ namespace ServForOracle.Internal
 
         //TODO Move the message to a resource
         public static string InvalidClassMessage { get; }
-            = "The type {0} doesn't conform with the guidelines for objects or collections. "
+            = "The type {0} doesn't conform with the guidelines for {1}. "
                 + "Please see the documentation on how to use this library.";
+
+        public static string TypeNotConfiguredMessage { get; }
+            = "The type {0} is not configured for automatic casting, please open an issue on github. "
+                + "In the mean time, you can use the OracleDbType Param create overload to solve it.";
 
         static ParamHandler()
         {
@@ -68,7 +72,6 @@ namespace ServForOracle.Internal
             if (type == null) return false;
             return type.IsGenericType && type.GetGenericTypeDefinition() == typeof(CollectionModel<>);
         }
-
 
         private static bool TryGetCollectionKeyValue(Type t, out string value)
         {
@@ -203,6 +206,8 @@ namespace ServForOracle.Internal
                 {
                     param.OracleDbType = OracleDbType.Date;
                 }
+                else
+                    throw new Exception(string.Format(TypeNotConfiguredMessage, type.Name));
             }
             else if (type.IsArray)
             {
@@ -210,6 +215,13 @@ namespace ServForOracle.Internal
                 {
                     param.OracleDbType = OracleDbType.Blob;
                 }
+                else if (TryGetCollectionKeyValue(type, out var collectionValue))
+                {
+                    param.UdtTypeName = collectionValue;
+                    param.OracleDbType = OracleDbType.Array;
+                }
+                else
+                    throw new Exception(string.Format(InvalidClassMessage, type.Name, "collections"));
             }
             else if (type == typeof(string))
             {
@@ -223,21 +235,13 @@ namespace ServForOracle.Internal
                     param.Size = default(int);
                 }
             }
-            else
+            else if (Models.TryGetValue(type, out var modelValue))
             {
-                if (Models.TryGetValue(type, out var modelValue))
-                {
-                    param.UdtTypeName = modelValue;
-                    param.OracleDbType = OracleDbType.Object;
-                }
-                else if (TryGetCollectionKeyValue(type, out var collectionValue))
-                {
-                    param.UdtTypeName = collectionValue;
-                    param.OracleDbType = OracleDbType.Array;
-                }
-                else
-                    throw new Exception(string.Format(InvalidClassMessage, type.Name));
+                param.UdtTypeName = modelValue;
+                param.OracleDbType = OracleDbType.Object;
             }
+            else
+                throw new Exception(string.Format(InvalidClassMessage, type.Name, "objects"));
 
             param.Direction = direction;
             param.Value = _value;

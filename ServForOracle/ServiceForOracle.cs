@@ -138,7 +138,7 @@ namespace ServForOracle
             foreach (var param in outParameters)
                 param.SetParamValue();
         }
-        
+
         /// <summary>
         /// Loads the Oracle.DataAccess library in case it couldn't use the default version
         /// </summary>

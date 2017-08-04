@@ -8,6 +8,10 @@ using Oracle.DataAccess.Client;
 
 namespace ServForOracle
 {
+    /// <summary>
+    /// The parameters that are send to Oracle procedure's or function's.
+    /// Handles the parameters information that is used to construct the oracleparam at query time.
+    /// </summary>
     public class Param
     {
         private Param(ParamDirection direction, Type type, object value, OracleDbType? oracleType = null)
@@ -27,6 +31,18 @@ namespace ServForOracle
 
         internal OracleDbType? OracleType { get; set; }
 
+        /// <summary>
+        /// Creates a paramater for an Oracle procedure or function
+        /// </summary>
+        /// <typeparam name="T">The type of the parameter to send (clr or custom types)</typeparam>
+        /// <param name="direction">The direction of the parameter, whether is Input, Output or InputOutput</param>
+        /// <param name="value">If it's an input parameter, the value to send</param>
+        /// <param name="oracleType">Optional parameter indicating the OracleDbType to which this parameter should
+        /// map. It's an advance option, should only be used when the library can't correctly inferred the oracle type</param>
+        /// <returns>A newly created param object to send to the oracledb</returns>
+        /// <remarks>This is the fully object factory method, try to use the more specific Input or Output.
+        /// Only use this one when strictly necessary.</remarks>
+        /// <remarks>The output parameters set the return value in the value object property</remarks>
         public static Param Create<T>(ParamDirection direction, T value, OracleDbType? oracleType = null)
         {
             var type = typeof(T);
@@ -36,8 +52,29 @@ namespace ServForOracle
             return new Param(direction, type, value, oracleType);
         }
 
+        /// <summary>
+        /// Creates an input parameter for an Oracle db procedure or function
+        /// </summary>
+        /// <typeparam name="T">The type of the parameter to send</typeparam>
+        /// <param name="value">The value that you're going to send to the db</param>
+        /// <returns>A newly created Param object configured as an input for the type specified.</returns>
         public static Param Input<T>(T value = default(T)) => Create(ParamDirection.Input, value);
 
-        public static Param Output<T>(T value = default(T)) => Create(ParamDirection.Output, value);
+        /// <summary>
+        /// Creates an output parameter for an Oracle db procedure or function
+        /// </summary>
+        /// <typeparam name="T">The type of the parameter to recieve</typeparam>
+        /// <returns>A newly created param object configured as an output for the type specified</returns>
+        /// <remarks>The output parameters set the return value in the value object property</remarks>
+        public static Param Output<T>() => Create(ParamDirection.Output, default(T));
+
+        /// <summary>
+        /// Creates an input/Output parameter for an Oracle db procedure or function
+        /// </summary>
+        /// <typeparam name="T">The type of the parameter to send and recieve</typeparam>
+        /// <param name="value">The value that you're going to send and recieve from the db</param>
+        /// <returns>A newly created Param object configured as an input/Output for the type specified.</returns>
+        /// <remarks>The output parameters set the return value in the value object property</remarks>
+        public static Param InputOutput<T>(T value = default(T)) => Create(ParamDirection.InputOutput, value);
     }
 }

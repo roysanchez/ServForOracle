@@ -2,8 +2,8 @@
   <PropertyGroup>
     <TargetFramework>net461</TargetFramework>
     <PackageId>ServForOracle</PackageId>
-    <PackageVersion>3.6.0</PackageVersion>
-    <Version>3.6.0</Version>
+    <PackageVersion>4.1.0</PackageVersion>
+    <Version>4.1.0</Version>
     <Title>Oracle Package and Type wrapper for .NET</Title>
     <PlatformTarget>AnyCPU</PlatformTarget>
     <Authors>Roy Sánchez</Authors>
