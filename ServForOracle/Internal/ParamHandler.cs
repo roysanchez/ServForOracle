@@ -172,24 +172,24 @@ namespace ServForOracle.Internal
                 {
                     param.OracleDbType = OracleDbType.Char;
                 }
-                if (type == typeof(sbyte) || type == typeof(sbyte?))
+                else if (type == typeof(sbyte) || type == typeof(sbyte?))
                 {
                     param.OracleDbType = OracleDbType.Byte;
                 }
-                if (type == typeof(short) || type == typeof(short?)
+                else if (type == typeof(short) || type == typeof(short?)
                     || type == typeof(byte) || type == typeof(byte?))
                 {
                     param.OracleDbType = OracleDbType.Int16;
                 }
-                if (type == typeof(int) || type == typeof(int?))
+                else if (type == typeof(int) || type == typeof(int?))
                 {
                     param.OracleDbType = OracleDbType.Int32;
                 }
-                if (type == typeof(long) || type == typeof(long))
+                else if (type == typeof(long) || type == typeof(long))
                 {
                     param.OracleDbType = OracleDbType.Int64;
                 }
-                if (type == typeof(Single) || type == typeof(Single?)
+                else if (type == typeof(Single) || type == typeof(Single?)
                     || type == typeof(float) || type == typeof(float?))
                 {
                     param.OracleDbType = OracleDbType.Single;

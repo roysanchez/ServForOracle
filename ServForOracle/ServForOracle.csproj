@@ -2,9 +2,9 @@
   <PropertyGroup>
     <TargetFramework>net461</TargetFramework>
     <PackageId>ServForOracle</PackageId>
-    <PackageVersion>4.1.0</PackageVersion>
-    <Version>4.1.0</Version>
-    <Title>Oracle Package and Type wrapper for .NET</Title>
+    <PackageVersion>4.1.5</PackageVersion>
+    <Version>4.1.5</Version>
+    <Title>ServForOracle - Oracle Package and Type wrapper for .NET</Title>
     <PlatformTarget>AnyCPU</PlatformTarget>
     <Authors>Roy Sánchez</Authors>
     <Description>A wrapper over Oracle native ODP.NET to make easier the calls to packages and the use of UDTs (User Define Types)</Description>
