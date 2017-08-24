@@ -24,7 +24,7 @@ namespace ServForOracle.Internal
 
         //TODO Move the message to a resource
         public static string InvalidClassMessage { get; }
-            = "The type {0} doesn't conform with the guidelines for {1}. "
+            = "The type {0} doesn't conform with the guidelines for input parameters. "
                 + "Please see the documentation on how to use this library.";
 
         public static string TypeNotConfiguredMessage { get; }
@@ -209,19 +209,9 @@ namespace ServForOracle.Internal
                 else
                     throw new Exception(string.Format(TypeNotConfiguredMessage, type.Name));
             }
-            else if (type.IsArray)
+            else if (type.IsArray && type == typeof(byte[]))
             {
-                if (type == typeof(byte[]))
-                {
-                    param.OracleDbType = OracleDbType.Blob;
-                }
-                else if (TryGetCollectionKeyValue(type, out var collectionValue))
-                {
-                    param.UdtTypeName = collectionValue;
-                    param.OracleDbType = OracleDbType.Array;
-                }
-                else
-                    throw new Exception(string.Format(InvalidClassMessage, type.Name, "collections"));
+                param.OracleDbType = OracleDbType.Blob;
             }
             else if (type == typeof(string))
             {
@@ -240,8 +230,13 @@ namespace ServForOracle.Internal
                 param.UdtTypeName = modelValue;
                 param.OracleDbType = OracleDbType.Object;
             }
+            else if (TryGetCollectionKeyValue(type, out var collectionValue))
+            {
+                param.UdtTypeName = collectionValue;
+                param.OracleDbType = OracleDbType.Array;
+            }
             else
-                throw new Exception(string.Format(InvalidClassMessage, type.Name, "objects"));
+                throw new Exception(string.Format(InvalidClassMessage, type.Name));
 
             param.Direction = direction;
             param.Value = _value;
