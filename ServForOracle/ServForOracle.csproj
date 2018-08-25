@@ -2,18 +2,23 @@
   <PropertyGroup>
     <TargetFramework>net461</TargetFramework>
     <PackageId>ServForOracle</PackageId>
-    <PackageVersion>4.1.6</PackageVersion>
-    <Version>4.1.6</Version>
+    <PackageVersion>5.1.0</PackageVersion>
+    <Version>5.1.0</Version>
     <Title>ServForOracle - Oracle Package and Type wrapper for .NET</Title>
     <PlatformTarget>AnyCPU</PlatformTarget>
     <Authors>Roy Sánchez</Authors>
     <Description>A wrapper over Oracle native ODP.NET to make easier the calls to packages and the use of UDTs (User Define Types)</Description>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
-    <Copyright>Copyright 2016 (c) Roy Sanchez. All rights reserved.</Copyright>
+    <Copyright>Copyright 2018 (c) Roy Sanchez. All rights reserved.</Copyright>
+    <Platforms>AnyCPU;x64</Platforms>
+    <PackageReleaseNotes>Updated the library to use a new Param&lt;T&gt;, removing the need to unbox the Value object.</PackageReleaseNotes>
+    <RepositoryUrl>https://github.com/roysanchez/ServForOracle/</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/roysanchez/ServForOracle/</PackageProjectUrl>
+    <PackageTags>Oracle; ODP.NET Native; Oracle UDT</PackageTags>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" />
   <ItemGroup>
-    <PackageReference Include="Microsoft.CSharp" Version="4.3.0" />
+    <PackageReference Include="Microsoft.CSharp" Version="4.5.0" />
     <PackageReference Include="Oracle.DataAccess">
       <ExcludeAssets>All</ExcludeAssets>
     </PackageReference>
@@ -48,10 +53,10 @@
     </Content>
   </ItemGroup>-->
   <ItemGroup>
-    <Reference Include="Oracle.DataAccess" Condition="$(Platform) == 'x64'">
+    <Reference Include="Oracle.DataAccess" Condition="($(Platform) == 'AnyCPU' OR $(Platform) == 'x64')">
       <HintPath>..\OracleDlls\x64\Oracle.DataAccess.dll</HintPath>
     </Reference>
-    <Reference Include="Oracle.DataAccess" Condition="($(Platform) == 'AnyCPU' OR $(Platform) == 'x86')">
+    <Reference Include="Oracle.DataAccess" Condition="($(Platform) == 'x86')">
       <HintPath>..\OracleDlls\x86\Oracle.DataAccess.dll</HintPath>
     </Reference>
   </ItemGroup>

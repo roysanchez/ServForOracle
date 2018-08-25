@@ -19,26 +19,40 @@ namespace ServForOracle
     {
         public ServiceForOracle(IConnectionStringProvider connectionString)
         {
-            ConnectionString = connectionString.Value;
+            //ConnectionString = connectionString.Value;
+            if (connectionString == null || string.IsNullOrEmpty(connectionString.Value))
+                throw new ArgumentNullException(nameof(connectionString));
+
+            DbConnection = new OracleConnection(connectionString.Value);
+            connectionCreatedExternally = false;
         }
 
-        private string ConnectionString { get; }
+        public ServiceForOracle(OracleConnection oracleConnection)
+        {
+            DbConnection = oracleConnection;
+            connectionCreatedExternally = true;
+        }
+        
+        public OracleConnection DbConnection { get; private set; }
+
+
+        private readonly bool connectionCreatedExternally;
+        private static readonly MethodInfo ConverterBase = typeof(ParamHandler).GetMethod("CreateOracleParam");
 
         private async Task<OracleCommand> CreateCommandAsync(string proc, CommandType type)
         {
-            if (String.IsNullOrEmpty(proc))
+            if (string.IsNullOrEmpty(proc))
                 throw new ArgumentNullException(nameof(proc));
 
-            OracleConnection con = new OracleConnection(ConnectionString);
-
-            await con.OpenAsync().ConfigureAwait(false);
-            var cmd = con.CreateCommand();
+            await DbConnection.OpenAsync().ConfigureAwait(false);
+            var cmd = DbConnection.CreateCommand();
             cmd.CommandType = type;
             cmd.CommandText = proc.Replace("\r\n", "\n");
 
             cmd.Disposed += (object sender, EventArgs e) =>
             {
-                con.Close();
+                if(!connectionCreatedExternally)
+                    DbConnection.Close();
             };
 
             return cmd;
@@ -119,11 +133,18 @@ namespace ServForOracle
             var outParameters = new List<OutParam>();
             foreach (var param in parameters)
             {
-                var oracleParam = ParamHandler.CreateOracleParam(param);
+                var genericMethod = ConverterBase.MakeGenericMethod(param.Type);
+                var oracleParam = genericMethod.Invoke(null, new[] { param }) as OracleParameter;
+
+                //var oracleParam = ParamHandler.CreateOracleParam(param);
                 cmd.Parameters.Add(oracleParam);
 
                 if (oracleParam.Direction == ParameterDirection.Output || oracleParam.Direction == ParameterDirection.InputOutput)
-                    outParameters.Add(new OutParam(param, oracleParam));
+                {
+                    var genericOutParam = typeof(OutParam<>).MakeGenericType(param.Type);
+                    
+                    outParameters.Add(Activator.CreateInstance(genericOutParam, new object[] { param, oracleParam }) as OutParam);
+                }
             }
 
             try

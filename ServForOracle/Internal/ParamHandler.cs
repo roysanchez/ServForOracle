@@ -14,12 +14,19 @@ namespace ServForOracle.Internal
     internal static class ParamHandler
     {
         private const int VARCHAR_MAX_SIZE = 32000;
+        /// <summary>
+        /// Read-Only dictionary with all the object types for the OracleDB.
+        /// The Key is the Type with the OracleType Attribute.
+        /// The Value is the Oracle Type description.
+        /// </summary>
+        /// <example>[{ClientClass, "HR.CLIENT_OBJ"}, {SalesClass, "HR.SALES_OBJ"}]</example>
         public static Dictionary<Type, string> Models { get; }
         /// <summary>
         /// Read-Only dictionary with all the collections types for the OracleDB.
         /// The Key is the Type with the Oracle Array Attribute or their collectionType.
         /// The Value is the Oracle Type description.
         /// </summary>
+        /// <example>[{IEnumerable<string>', "HR.STRING_LIST"}, {IEnumerable<int>, "HR.NUMBER_LIST"}]</example>
         public static Dictionary<Type, string> Collections { get; }
 
         //TODO Move the message to a resource
@@ -31,6 +38,10 @@ namespace ServForOracle.Internal
             = "The type {0} is not configured for automatic casting, please open an issue on github. "
                 + "In the mean time, you can use the OracleDbType Param create overload to solve it.";
 
+        /// <summary>
+        /// Looks for all the assemblies in the current AppDomain that aren't either Microsoft, Oracles or the System.
+        /// In those assemblies then selects all the instantiable classes that have the OracleCustomTypeMapping Attribute
+        /// </summary>
         static ParamHandler()
         {
             var executing = Assembly.GetExecutingAssembly();
@@ -83,6 +94,13 @@ namespace ServForOracle.Internal
             return !string.IsNullOrEmpty(value);
         }
 
+        /// <summary>
+        /// Checks if the type specified was previously registered on the constructor (the linq query) as it otherwise means
+        /// the object was dynamically created and the OracleDataAccess Library wouldn't find it and it would crash.
+        /// This is a pre-check as a way to control the exception, and throw it here instead of the Oracle library that would obfuscate it.
+        /// </summary>
+        /// <param name="type">The Type to check</param>
+        /// <returns>True or False indicating if the type was previously registered on the constructor</returns>
         public static bool IsValidParameterType(Type type)
         {
             if (type.IsValueType
@@ -108,33 +126,25 @@ namespace ServForOracle.Internal
         /// <summary>
         /// Creates an OracleParameter with the specfied information
         /// </summary>
+        /// /// <typeparam name="T">The type of the oracle parameter value</typeparam>
         /// <param name="parameter">The Param to transform into an OracleParameter object</param>
+        /// <remarks>This method is call through Reflexion on the ServiceForOracle class</remarks>
         /// <returns></returns>
-        public static OracleParameter CreateOracleParam(Param parameter)
+        //public static OracleParameter CreateOracleParam(Param parameter)
+        //{
+        //    if (parameter == null)
+        //        throw new ArgumentNullException(nameof(parameter));
+
+        //    return CreateOracleParam(parameter.Type, parameter.Value, parameter.ParamDirection, parameter.OracleType);
+        //}
+
+        public static OracleParameter CreateOracleParam<T>(Param<T> parameter)
         {
             if (parameter == null)
                 throw new ArgumentNullException(nameof(parameter));
 
-            return CreateOracleParam(parameter.Type, parameter.Value, parameter.ParamDirection, parameter.OracleType);
-        }
-
-        /// <summary>
-        /// Creates an OracleParameter with the specfied information
-        /// </summary>
-        /// <typeparam name="T">The type of the oracle parameter value</typeparam>
-        /// <param name="type">The type that the value represents (in case the value is null)</param>
-        /// <param name="value">The value to send</param>
-        /// <param name="paramType">The direction of the parameter (IN, OUT, INOUT)</param>
-        /// <param name="oracleType">In the case where the caller wants to set explicitly the type of the oracleDb to use</param>
-        /// <returns>Returns an OracleParameter with the data specified.</returns>
-        public static OracleParameter CreateOracleParam<T>(Type type, T value, ParamDirection paramType,
-                OracleDbType? oracleType = null)
-        {
-            if (type == null)
-                throw new ArgumentNullException(nameof(type));
-
             var paramDirection = ParameterDirection.Input;
-            switch (paramType)
+            switch (parameter.ParamDirection)
             {
                 case ParamDirection.Input:
                     paramDirection = ParameterDirection.Input;
@@ -147,9 +157,35 @@ namespace ServForOracle.Internal
                     break;
             }
 
-            return CreateOracleParam(type, value, paramDirection, oracleType);
+            return CreateOracleParam(typeof(T), parameter.Value, paramDirection, parameter.OracleType);
+
+            //return CreateOracleParam(parameter.Type, parameter.Value, parameter.ParamDirection, parameter.OracleType);
         }
 
+        ///// <summary>
+        ///// Creates an OracleParameter with the specfied information
+        ///// </summary>
+        ///// <typeparam name="T">The type of the oracle parameter value</typeparam>
+        ///// <param name="type">The type that the value represents (in case the value is null)</param>
+        ///// <param name="value">The value to send</param>
+        ///// <param name="paramType">The direction of the parameter (IN, OUT, INOUT)</param>
+        ///// <param name="oracleType">In the case where the caller wants to set explicitly the type of the oracleDb to use</param>
+        ///// <returns>Returns an OracleParameter with the data specified.</returns>
+        //public static OracleParameter CreateOracleParam<T>(Type type, T value, ParamDirection paramType,
+        //        OracleDbType? oracleType = null)
+        //{
+
+        //}
+
+        /// <summary>
+        /// Creates an OracleParameter based on the CLR types, following the mapping table defined here:
+        /// //docs.oracle.com/database/121/ODPNT/featUDTs.htm#BABIFHGJ
+        /// </summary>
+        /// <param name="type">The CLR type to try and map</param>
+        /// <param name="value">The value that will be assign to the OracleParameter (can be null if the direction is Output)</param>
+        /// <param name="direction">The direction of the OracleParameter (IN, OUT, INOUT)</param>
+        /// <param name="oracleType">For advance uses, specify directly the OracleDbType to use instead of the standard mapping</param>
+        /// <returns>An OracleParameter with the expected OracleDbType that closely maps to the CLR type specified.</returns>
         private static OracleParameter CreateOracleParam(Type type, object value, ParameterDirection direction,
             OracleDbType? oracleType = null)
         {
@@ -243,6 +279,11 @@ namespace ServForOracle.Internal
             return param;
         }
 
+        /// <summary>
+        /// Extracts the oracle type name from the OracleCustomTypeMapping Attribute
+        /// </summary>
+        /// <param name="type">The type to extract the attribute value from</param>
+        /// <returns>A string with the name of the Oracle UDT in the attribute, otherwise null</returns>
         private static string GetOracleTypeNameFromAttribute(Type type)
         {
             //TODO throw exception when null
@@ -264,10 +305,10 @@ namespace ServForOracle.Internal
         /// <param name="param">Oracle param object</param>
         /// <param name="isNullable">If the type of the result is nullable</param>
         /// <returns>The oracle param value</returns>
-        private static object extractNullableValue(dynamic param, bool isNullable)
+        private static object ExtractNullableValue(dynamic param, bool isNullable)
         {
             if (isNullable)
-                return extractValue(param);
+                return ExtractValue(param);
             else if (param.IsNull)
                 throw new InvalidCastException("Can't cast null to a non nullable");
             else
@@ -279,10 +320,10 @@ namespace ServForOracle.Internal
         /// </summary>
         /// <param name="param">Oracle Param object</param>
         /// <returns>The oracle param value</returns>
-        private static object extractValue(dynamic param)
+        private static object ExtractValue(dynamic param)
         {
             if (!(param is Oracle.DataAccess.Types.INullable))
-                throw new InvalidCastException($"Can't use {nameof(extractValue)} for type ${param.GetType().Name}");
+                throw new InvalidCastException($"Can't use {nameof(ExtractValue)} for type ${param.GetType().Name}");
 
             if (param.IsNull)
                 return null;
@@ -353,41 +394,41 @@ namespace ServForOracle.Internal
                         value = str.ToString();
                     break;
                 case OracleClob clob when retType == typeof(string):
-                    value = extractValue(clob);
+                    value = ExtractValue(clob);
                     break;
                 case OracleBFile file when retType == typeof(byte[]):
-                    value = extractValue(file);
+                    value = ExtractValue(file);
                     break;
                 case OracleBlob blob when retType == typeof(byte[]):
-                    value = extractValue(blob);
+                    value = ExtractValue(blob);
                     break;
                 case OracleDate date when retType == typeof(DateTime) || retType == typeof(DateTime?):
-                    value = extractNullableValue(date, isNullable);
+                    value = ExtractNullableValue(date, isNullable);
                     break;
                 case OracleIntervalDS interval when retType == typeof(TimeSpan) || retType == typeof(TimeSpan?):
-                    value = extractNullableValue(interval, isNullable);
+                    value = ExtractNullableValue(interval, isNullable);
                     break;
                 case OracleIntervalYM intervalYM when (
                         retType == typeof(long) || retType == typeof(long?) ||
                         retType == typeof(float) || retType == typeof(float?) ||
                         retType == typeof(double) || retType == typeof(double?)
                     ):
-                    value = extractNullableValue(intervalYM, isNullable);
+                    value = ExtractNullableValue(intervalYM, isNullable);
                     break;
                 case OracleBinary binary when retType == typeof(byte[]):
-                    value = extractValue(binary);
+                    value = ExtractValue(binary);
                     break;
                 case OracleRef reff when retType == typeof(string):
-                    value = extractValue(reff);
+                    value = ExtractValue(reff);
                     break;
                 case OracleTimeStamp timestamp when retType == typeof(DateTime) || retType == typeof(DateTime?):
-                    extractNullableValue(timestamp, isNullable);
+                    ExtractNullableValue(timestamp, isNullable);
                     break;
                 case OracleTimeStampLTZ timestampLTZ when retType == typeof(DateTime) || retType == typeof(DateTime?):
-                    extractNullableValue(timestampLTZ, isNullable);
+                    ExtractNullableValue(timestampLTZ, isNullable);
                     break;
                 case OracleTimeStampTZ timestampTZ when retType == typeof(DateTime) || retType == typeof(DateTime?):
-                    extractNullableValue(timestampTZ, isNullable);
+                    ExtractNullableValue(timestampTZ, isNullable);
                     break;
                 default:
                     if (TryGetCollectionKeyValue(retType, out var oracleType))

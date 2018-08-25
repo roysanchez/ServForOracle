@@ -9,26 +9,22 @@ using System.Threading.Tasks;
 
 namespace ServForOracle.Internal
 {
-    internal class OutParam
+    internal class OutParam<T>: OutParam
     {
-        public OutParam(Param param, OracleParameter oracleParameter)
+        public OutParam(Param<T> param, OracleParameter oracleParameter)
+            :base(param, oracleParameter)
         {
             ServiceParameter = param;
             OutParameter = oracleParameter;
         }
 
-        public Param ServiceParameter { get; set; }
-        public OracleParameter OutParameter { get; set; }
+        public new Param<T> ServiceParameter { get; set; }
 
-        private static MethodInfo ConverterBase = typeof(ParamHandler).GetMethod("ConvertOracleParameterToBaseType");
-
-
-        public void SetParamValue()
+        public override void SetParamValue()
         {
             try
             {
-                var converter = ConverterBase.MakeGenericMethod(ServiceParameter.Type);
-                ServiceParameter.Value = converter.Invoke(null, new[] { OutParameter });
+                ServiceParameter.Value = ParamHandler.ConvertOracleParameterToBaseType<T>(OutParameter);
             }
             catch (Exception ex)
             {
@@ -39,5 +35,19 @@ namespace ServForOracle.Internal
                     ex);
             }
         }
+    }
+
+    internal abstract class OutParam
+    {
+        public OutParam(Param param, OracleParameter oracleParameter)
+        {
+            ServiceParameter = param;
+            OutParameter = oracleParameter;
+        }
+
+        public Param ServiceParameter { get; set; }
+        public OracleParameter OutParameter { get; set; }
+
+        public abstract void SetParamValue();
     }
 }
