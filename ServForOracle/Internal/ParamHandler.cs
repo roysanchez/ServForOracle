@@ -348,11 +348,14 @@ namespace ServForOracle.Internal
             if (type == retType)
             {
                 //Check if property IsNull exists
-                if (type.GetProperty("IsNull") != null)
+                var prop = type.GetProperty("IsNull");
+                if (prop != null)
                 {
-                    dynamic val = oracleParam.Value;
-                    if (val.IsNull)
+                    dynamic val = prop.GetValue(oracleParam.Value);
+                    if (val)
+                    {
                         return default(T);
+                    }
                 }
 
                 return (T)oracleParam.Value;
@@ -433,8 +436,8 @@ namespace ServForOracle.Internal
                 default:
                     if (TryGetCollectionKeyValue(retType, out var oracleType))
                     {
-                        dynamic temp = oracleParam.Value;
-                        value = temp.Array;
+                        var prop = type.GetProperty("Array");
+                        value = prop.GetValue(oracleParam.Value);
                     }
                     else
                         throw new InvalidCastException($"Can't cast type {type.Name} to {retType.Name} " +
