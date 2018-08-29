@@ -1,4 +1,5 @@
 ﻿using Oracle.DataAccess.Client;
+using ServForOracle.Internal;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -32,6 +33,13 @@ namespace ServForOracle.Tools
         static public Assembly LoadOracleAssembly(object sender, ResolveEventArgs e)
         {
             var requestedName = new AssemblyName(e.Name);
+
+            if(requestedName.Name == ParamHandler.ProxiesAssemblyName.Name)
+            {
+                var x = Assembly.GetAssembly(ParamHandler.Proxies.First().Value);
+                return x;
+                //return Assembly.Load(ParamHandler.ProxiesAssemblyName);
+            }
 
             if (requestedName.Name == OracleDataAccess)
             {

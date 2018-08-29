@@ -167,7 +167,7 @@ namespace ServForOracle
         static ServiceForOracle()
         {
             AppDomain.CurrentDomain.AssemblyResolve += Util.LoadOracleAssembly;
-            AppDomain.CurrentDomain.ProcessExit += Util.CloseOracleConnectionPool;
+            AppDomain.CurrentDomain.ProcessExit += Util.CloseOracleConnectionPool;    
         }
     }
 }

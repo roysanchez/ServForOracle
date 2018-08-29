@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Linq;
 using System.Reflection;
+using System.Reflection.Emit;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -21,6 +22,8 @@ namespace ServForOracle.Internal
         /// </summary>
         /// <example>[{ClientClass, "HR.CLIENT_OBJ"}, {SalesClass, "HR.SALES_OBJ"}]</example>
         public static Dictionary<Type, string> Models { get; }
+
+        public static Dictionary<Type, Type> Proxies { get; private set; }
         /// <summary>
         /// Read-Only dictionary with all the collections types for the OracleDB.
         /// The Key is the Type with the Oracle Array Attribute or their collectionType.
@@ -60,8 +63,20 @@ namespace ServForOracle.Internal
             var types = assemblies.SelectMany(a => a.GetTypes())
                         .Where(t => t.IsClass && !t.IsSealed && !t.IsAbstract);
 
-            Models = types.Where(t => t.IsSubclassOf(typeof(TypeModel)))
-                        .ToDictionary(t => t, t => GetOracleTypeNameFromAttribute(t));
+            Proxies = new Dictionary<Type, Type>();
+            Models = new Dictionary<Type, string>();
+
+            foreach (var type in types.Where(t => t.GetCustomAttribute(typeof(UDTNameAttribute)) != null)) //t.IsSubclassOf(typeof(TypeModel))))
+            {
+                var udtName = GetOracleTypeNameFromAttribute(type);
+                var proxyType = CreateProxyType(type, udtName);
+
+                Proxies.Add(type, proxyType);
+                Models.Add(proxyType, udtName);
+            }
+
+            //Models = types.Where(t => t.IsSubclassOf(typeof(TypeModel)))
+            //            .ToDictionary(t => t, t => GetOracleTypeNameFromAttribute(t));
 
 
             var tempCol = types
@@ -76,6 +91,73 @@ namespace ServForOracle.Internal
                 var generic = typeof(IEnumerable<>).MakeGenericType(keyValue.Key.BaseType.GetGenericArguments()[0]);
                 Collections.Add(generic, keyValue.Value);
             }
+
+        }
+
+        internal static AssemblyName ProxiesAssemblyName = new AssemblyName("servForOracleProxies");
+        internal static AssemblyBuilder dynamicAssembly = AppDomain.CurrentDomain.DefineDynamicAssembly(ProxiesAssemblyName, AssemblyBuilderAccess.RunAndSave);
+        private static ModuleBuilder dynamicModule = dynamicAssembly.DefineDynamicModule(ProxiesAssemblyName.Name);
+
+        private static Type CreateProxyType(Type userType, string UDTName)
+        {
+            var proxyTypeDefinition = dynamicModule.DefineType(userType.Name + "Proxy", TypeAttributes.Public, typeof(TypeModel));
+
+            var attrCtorInfo = typeof(OracleCustomTypeMappingAttribute).GetConstructor(new Type[] { typeof(string) });
+            var attrBuilder = new CustomAttributeBuilder(attrCtorInfo, new object[] { UDTName }); //"UNISERV.HEADERSEGURIDAD"
+
+            proxyTypeDefinition.SetCustomAttribute(attrBuilder);
+
+            var propAttrCtorInfo = typeof(OracleObjectMappingAttribute).GetConstructor(new Type[] { typeof(string) });
+
+            foreach (var prop in userType.GetProperties())
+            {
+                var newProp = proxyTypeDefinition.DefineProperty(prop.Name, System.Reflection.PropertyAttributes.None, prop.PropertyType, Type.EmptyTypes);
+                newProp.SetCustomAttribute(new CustomAttributeBuilder(propAttrCtorInfo, new object[] { prop.Name.ToUpper() }));
+
+                var fieldBuilder = proxyTypeDefinition.DefineField("_" + prop.Name, prop.PropertyType, FieldAttributes.Private);
+                var methodAttributes = MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig | MethodAttributes.Virtual;
+                var getMethodBuilder = proxyTypeDefinition.DefineMethod("get_" + prop.Name, methodAttributes, prop.PropertyType, Type.EmptyTypes);
+                var ilGenerator = getMethodBuilder.GetILGenerator();
+                ilGenerator.Emit(OpCodes.Ldarg_0);
+                ilGenerator.Emit(OpCodes.Ldfld, fieldBuilder);
+                ilGenerator.Emit(OpCodes.Ret);
+
+
+                var setMethodBuilder = proxyTypeDefinition.DefineMethod("set_" + prop.Name, methodAttributes, null, new Type[] { typeof(string) });
+                ilGenerator = setMethodBuilder.GetILGenerator();
+                ilGenerator.Emit(OpCodes.Ldarg_0);
+                ilGenerator.Emit(OpCodes.Ldarg_1);
+                ilGenerator.Emit(OpCodes.Stfld, fieldBuilder);
+                ilGenerator.Emit(OpCodes.Ret);
+
+                newProp.SetGetMethod(getMethodBuilder);
+                newProp.SetSetMethod(setMethodBuilder);
+            }
+
+            var proxyType = proxyTypeDefinition.CreateType();
+            return proxyType;
+        }
+
+        private static object ConvertToProxy<T>(object value)
+        {
+            var userType = typeof(T);
+            if (Proxies.TryGetValue(userType, out var proxyType) && value != null)
+            {
+                var instance = Activator.CreateInstance(proxyType);
+
+                foreach (var prop in proxyType.GetProperties())
+                {
+                    var userProp = userType.GetRuntimeProperty(prop.Name);
+                    if (userProp != null)
+                    {
+                        prop.SetValue(instance, userProp.GetValue(value));
+                    }
+                }
+
+                return instance;
+            }
+
+            return null;
         }
 
         private static bool IsCollectionType(Type type)
@@ -105,7 +187,7 @@ namespace ServForOracle.Internal
         {
             if (type.IsValueType
                 || type == typeof(string)
-                || Models.Any(c => c.Key == type)
+                || Proxies.ContainsKey(type)
                 || TryGetCollectionKeyValue(type, out var collectionValue)
                 )
                 return true;
@@ -157,8 +239,8 @@ namespace ServForOracle.Internal
                     break;
             }
 
-            return CreateOracleParam(typeof(T), parameter.Value, paramDirection, parameter.OracleType);
-
+            return CreateOracleParam(typeof(T), ConvertToProxy<T>(parameter.Value), paramDirection, parameter.OracleType);
+            //return CreateOracleParam(typeof(T), parameter.Value, paramDirection, parameter.OracleType);
             //return CreateOracleParam(parameter.Type, parameter.Value, parameter.ParamDirection, parameter.OracleType);
         }
 
@@ -186,10 +268,11 @@ namespace ServForOracle.Internal
         /// <param name="direction">The direction of the OracleParameter (IN, OUT, INOUT)</param>
         /// <param name="oracleType">For advance uses, specify directly the OracleDbType to use instead of the standard mapping</param>
         /// <returns>An OracleParameter with the expected OracleDbType that closely maps to the CLR type specified.</returns>
-        private static OracleParameter CreateOracleParam(Type type, object value, ParameterDirection direction,
+        private static OracleParameter CreateOracleParam(Type realType, object value, ParameterDirection direction,
             OracleDbType? oracleType = null)
         {
-            if (type == null)
+
+            if (!Proxies.TryGetValue(realType, out var type))
                 throw new ArgumentNullException(nameof(type));
 
             object _value = value;
@@ -292,11 +375,13 @@ namespace ServForOracle.Internal
 
             var oracleAttribute = (
                     from attr in type.GetCustomAttributes(false)
-                    where attr.GetType() == typeof(OracleCustomTypeMappingAttribute)
-                    select attr as OracleCustomTypeMappingAttribute
+                    where attr.GetType() == typeof(UDTNameAttribute)
+                    select attr as UDTNameAttribute
+                    //where attr.GetType() == typeof(OracleCustomTypeMappingAttribute)
+                    //select attr as OracleCustomTypeMappingAttribute
                 ).FirstOrDefault();
 
-            return oracleAttribute?.UdtTypeName;
+            return oracleAttribute?.Name;
         }
 
         /// <summary>
