@@ -13,6 +13,11 @@ namespace ServForOracle.Models
 {
     public abstract class TypeModel : TypeFactory, IOracleCustomType
     {
+        public TypeModel()
+        {
+
+        }
+
         void ProcessProperties(Action<PropertyInfo, OracleObjectMappingAttribute> process)
         {
             var properties = GetType().GetRuntimeProperties();

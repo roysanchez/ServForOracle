@@ -1,6 +1,7 @@
 ﻿using Oracle.DataAccess.Client;
 using ServForOracle.Internal;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -34,14 +35,11 @@ namespace ServForOracle.Tools
         {
             var requestedName = new AssemblyName(e.Name);
 
-            if(requestedName.Name == ParamHandler.ProxiesAssemblyName.Name)
+            if (requestedName.Name == ProxyFactory.NAME)
             {
-                var x = Assembly.GetAssembly(ParamHandler.Proxies.First().Value);
-                return x;
-                //return Assembly.Load(ParamHandler.ProxiesAssemblyName);
+                return ProxyFactory.Assembly;
             }
-
-            if (requestedName.Name == OracleDataAccess)
+            else if (requestedName.Name == OracleDataAccess)
             {
                 try
                 {
