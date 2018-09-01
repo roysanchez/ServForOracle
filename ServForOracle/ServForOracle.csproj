@@ -21,6 +21,7 @@
     <PackageReference Include="Oracle.DataAccess">
       <ExcludeAssets>All</ExcludeAssets>
     </PackageReference>
+    <PackageReference Include="System.ValueTuple" Version="4.5.0" />
   </ItemGroup>
   <!--<ItemGroup>
     <Content Include="..\OracleDlls\x64\Oracle.DataAccess.dll">

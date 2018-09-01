@@ -6,16 +6,17 @@ using System.Threading.Tasks;
 
 namespace ServForOracle
 {
-    [AttributeUsage(AttributeTargets.Class, AllowMultiple = false)]
-    public class UDTNameAttribute: Attribute
+    [AttributeUsage(AttributeTargets.Property, AllowMultiple = false)]
+    public class UDTPropertyAttribute: Attribute
     {
         public string Name { get; private set; }
-        public UDTNameAttribute(string name)
+
+        public UDTPropertyAttribute(string name)
         {
             if (string.IsNullOrWhiteSpace(name))
                 throw new ArgumentNullException(nameof(name));
 
-            Name = name.ToUpper();
+            Name = name;
         }
     }
 }

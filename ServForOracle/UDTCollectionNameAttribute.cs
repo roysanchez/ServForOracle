@@ -7,10 +7,10 @@ using System.Threading.Tasks;
 namespace ServForOracle
 {
     [AttributeUsage(AttributeTargets.Class, AllowMultiple = false)]
-    public class UDTNameAttribute: Attribute
+    public class UDTCollectionNameAttribute: Attribute
     {
         public string Name { get; private set; }
-        public UDTNameAttribute(string name)
+        public UDTCollectionNameAttribute(string name)
         {
             if (string.IsNullOrWhiteSpace(name))
                 throw new ArgumentNullException(nameof(name));
