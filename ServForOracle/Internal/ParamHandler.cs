@@ -100,12 +100,6 @@ namespace ServForOracle.Internal
             return null;
         }
 
-        private static bool IsCollectionType(Type type)
-        {
-            if (type == null) return false;
-            return type.IsGenericType && type.GetGenericTypeDefinition() == typeof(CollectionModel<>);
-        }
-
         private static bool TryGetCollectionUdtName(Type t, out string collectionUdTName)
         {
             collectionUdTName = ProxyFactory.CollectionProxies
