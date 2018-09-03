@@ -35,11 +35,16 @@ namespace ServForOracle.Internal
         /// </summary>
         /// <example>[{IEnumerable<stringProxy>', "HR.STRING_LIST"}, {IEnumerable<intProxy>, "HR.NUMBER_LIST"}]</example>
         public static Dictionary<Type, string> CollectionProxies { get; private set; }
+        /// <summary>
+        /// Used to check if the UDT type is registered
+        /// </summary>
+        private static HashSet<string> UDTLists;
 
         static ProxyFactory()
         {
             Proxies = new Dictionary<Type, (Type proxyType, string udtName)>();
             CollectionProxies = new Dictionary<Type, string>();
+            UDTLists = new HashSet<string>();
 
             var executing = Assembly.GetExecutingAssembly();
 
@@ -106,22 +111,29 @@ namespace ServForOracle.Internal
 
         internal static Type GetOrCreateProxyCollectionType(Type underlyingUserType, string overrideUdtCollectioName = null)
         {
-            if (CollectionProxies.ContainsKey(underlyingUserType))
-            {
-                return underlyingUserType;
-            }
-
             var udtCollectionName = overrideUdtCollectioName ?? GetUdtCollectionName(underlyingUserType);
 
             if (string.IsNullOrWhiteSpace(udtCollectionName))
             {
                 return null;
             }
+            
+            //Checks to see if the type/udtname combination exists.
+            if (CollectionProxies.Any(c => c.Key.GetCollectionUnderType() == underlyingUserType && c.Value == udtCollectionName))
+            {
+                return underlyingUserType;
+            }
+
+            if(!UDTLists.Add(udtCollectionName))
+            {
+                throw new ArgumentException(nameof(udtCollectionName), $"The UDT collection key '{udtCollectionName}' is registered.");
+            }
+
             var underlyingProxyType = GetOrCreateProxyType(underlyingUserType);
 
             if (underlyingProxyType == null)
             {
-                throw new Exception("A list type must have an object type as well");
+                throw new Exception("A collection type must have an object type or a CLR type underneath.");
             }
 
             var generic = typeof(CollectionModel<>).MakeGenericType(new Type[] { underlyingProxyType });
@@ -152,6 +164,11 @@ namespace ServForOracle.Internal
             {
                 throw new ArgumentNullException(nameof(udtName), "In order to create a proxy for a class you must use the UDTName attribute" +
                     " or pass it as a parameter");
+            }
+
+            if (!UDTLists.Add(udtName))
+            {
+                throw new ArgumentException(nameof(udtName), $"The UDT key '{udtName}' is already registered.");
             }
 
             var proxyTypeDefinition = dynamicModule.DefineType(userType.Name + "Proxy", TypeAttributes.Public, typeof(TypeModel));
