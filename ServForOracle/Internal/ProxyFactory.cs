@@ -104,15 +104,14 @@ namespace ServForOracle.Internal
             }
         }
 
-        //TODO handle list with clr types
-        private static Type GetOrCreateProxyCollectionType(Type underlyingUserType)
+        internal static Type GetOrCreateProxyCollectionType(Type underlyingUserType, string overrideUdtCollectioName = null)
         {
             if (CollectionProxies.ContainsKey(underlyingUserType))
             {
                 return underlyingUserType;
             }
 
-            var udtCollectionName = GetUdtCollectionName(underlyingUserType);
+            var udtCollectionName = overrideUdtCollectioName ?? GetUdtCollectionName(underlyingUserType);
 
             if (string.IsNullOrWhiteSpace(udtCollectionName))
             {
@@ -138,7 +137,7 @@ namespace ServForOracle.Internal
             return arrayProxy;
         }
 
-        private static Type GetOrCreateProxyType(Type userType)
+        internal static Type GetOrCreateProxyType(Type userType, string overrideUdtName = null)
         {
             if (userType == null)
                 return null;
@@ -147,7 +146,7 @@ namespace ServForOracle.Internal
             else if (Proxies.TryGetValue(userType, out var _exists))
                 return _exists.ProxyType;
 
-            var udtName = GetUdtName(userType);
+            var udtName = overrideUdtName ?? GetUdtName(userType);
             
             if (string.IsNullOrWhiteSpace(udtName))
             {
