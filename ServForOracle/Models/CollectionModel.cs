@@ -10,6 +10,11 @@ namespace ServForOracle.Models
 {
     public abstract class CollectionModel<T> : TypeFactory, IOracleCustomType, IOracleArrayTypeFactory
     {
+        public CollectionModel()
+        {
+
+        }
+
         [OracleArrayMapping]
         public T[] Array { get; set; }
 
