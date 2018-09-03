@@ -182,7 +182,14 @@ namespace ServForOracle.Internal
                 }
                 else if (propType.IsCollection())
                 {
-                    AddProperty(proxyTypeDefinition, prop.Name, udt, GetOrCreateProxyCollectionType(propType.GetCollectionUnderType()), propAttrCtorInfo);
+                    var collectionType = GetOrCreateProxyCollectionType(propType.GetCollectionUnderType());
+                    if(collectionType == null)
+                    {
+                        throw new ArgumentException($"The collection property {prop.Name}:{propType.Name} for the type {userType.Name}, must "
+                            + $"have the {nameof(UDTCollectionNameAttribute)} set in the {propType.GetCollectionUnderType()} class with the "
+                            + "Oracle UDT collection name.");
+                    }
+                    AddProperty(proxyTypeDefinition, prop.Name, udt, collectionType, propAttrCtorInfo);
                 }
                 else if (propType.IsClass)
                 {
@@ -213,7 +220,7 @@ namespace ServForOracle.Internal
         {
             var newProp = proxyTypeDefinition.DefineProperty(NULL_PROP, PropertyAttributes.None, proxyTypeDefinition, Type.EmptyTypes);
 
-            var fieldSetMethod = proxyTypeDefinition.BaseType.GetProperty("IsNull").GetSetMethod();
+            var fieldSetMethod = proxyTypeDefinition.BaseType.GetProperty(nameof(TypeFactory.IsNull)).GetSetMethod();
             var methodAttributes = MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig;
             var getMethodBuilder = proxyTypeDefinition.DefineMethod("get_Null", methodAttributes, proxyTypeDefinition, Type.EmptyTypes);
 

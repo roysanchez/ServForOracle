@@ -350,7 +350,7 @@ namespace ServForOracle.Internal
             if (type == retType)
             {
                 //Check if property IsNull exists
-                var prop = type.GetProperty("IsNull");
+                var prop = type.GetProperty(nameof(TypeFactory.IsNull));
                 if (prop != null)
                 {
                     dynamic val = prop.GetValue(oracleParam.Value);
