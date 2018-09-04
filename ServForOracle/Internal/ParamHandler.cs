@@ -13,6 +13,10 @@ using System.Threading.Tasks;
 
 namespace ServForOracle.Internal
 {
+    /// <summary>
+    /// Handles all the common interactions (convertion, transformation, extracting values, etc...)
+    ///  between the <see cref="Param{T}"/> objects and the <see cref="OracleParameter"/> objects
+    /// </summary>
     internal static class ParamHandler
     {
         private const int VARCHAR_MAX_SIZE = 32000;
