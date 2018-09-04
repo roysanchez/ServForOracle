@@ -37,15 +37,20 @@ namespace ServForOracle
         /// <exception cref="ArgumentNullException">if either <paramref name="underlyingType"/> or 
         /// <paramref name="udtCollectionName"/> is null or empty
         /// </exception>
+        /// /// <exception cref="ArgumentException">If the <paramref name="udtCollectionName"/> has an invalid format</exception>
         public static void CreateListType(Type underlyingType, string udtCollectionName)
         {
-            if(underlyingType == null)
+            if (underlyingType == null)
             {
                 throw new ArgumentNullException(nameof(underlyingType));
             }
-            else if(string.IsNullOrWhiteSpace(udtCollectionName))
+            else if (string.IsNullOrWhiteSpace(udtCollectionName))
             {
                 throw new ArgumentNullException(nameof(udtCollectionName));
+            }
+            else if (!Tools.Util.CheckUdtName(udtCollectionName))
+            {
+                throw new ArgumentException("The UDT name must have the format \"SCHEMA.UDTNAME\"", nameof(udtCollectionName));
             }
 
             ProxyFactory.GetOrCreateProxyCollectionType(underlyingType, udtCollectionName);
@@ -72,6 +77,7 @@ namespace ServForOracle
         /// <exception cref="ArgumentNullException">If either the <paramref name="type"/> or <paramref name="udtName"/> 
         /// is null or empty.
         /// </exception>
+        /// <exception cref="ArgumentException">If the <paramref name="udtName"/> has an invalid format</exception>
         public static void CreateType(Type type, string udtName)
         {
             if(type == null)
@@ -81,6 +87,10 @@ namespace ServForOracle
             else if(string.IsNullOrWhiteSpace(udtName))
             {
                 throw new ArgumentNullException(nameof(udtName));
+            }
+            else if (!Tools.Util.CheckUdtName(udtName))
+            {
+                throw new ArgumentException("The UDT name must have the format \"SCHEMA.UDTNAME\"", nameof(udtName));
             }
 
             ProxyFactory.GetOrCreateProxyType(type, udtName);

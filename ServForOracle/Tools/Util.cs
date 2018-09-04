@@ -88,5 +88,21 @@ namespace ServForOracle.Tools
         {
             OracleConnection.ClearAllPools();
         }
+
+        /// <summary>
+        /// Checks if the <paramref name="udtName"/> has the correct format of "SCHEMA.UDTNAME"
+        /// </summary>
+        /// <param name="udtName">The name to check</param>
+        /// <returns>true if the format is valid otherwise false</returns>
+        public static bool CheckUdtName(string udtName)
+        {
+            var parts = udtName.Split('.');
+            if (parts.Length != 2 || string.IsNullOrWhiteSpace(parts[0]) || string.IsNullOrWhiteSpace(parts[1]))
+            {
+                return false;
+            }
+
+            return true;
+        }
     }
 }

@@ -29,12 +29,8 @@ namespace ServForOracle
         {
             if (string.IsNullOrWhiteSpace(name))
                 throw new ArgumentNullException(nameof(name));
-
-            var parts = name.Split('.');
-            if (parts.Length != 2 || string.IsNullOrWhiteSpace(parts[0]) || string.IsNullOrWhiteSpace(parts[1]))
-            {
+            if(!Tools.Util.CheckUdtName(name))
                 throw new ArgumentException("The UDT name must have the format \"SCHEMA.UDTNAME\"", nameof(name));
-            }
 
             Name = name.ToUpper();
         }
