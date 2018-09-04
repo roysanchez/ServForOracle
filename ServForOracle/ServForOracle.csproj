@@ -10,7 +10,8 @@
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
     <Copyright>Copyright 2018 (c) Roy Sanchez. All rights reserved.</Copyright>
     <Platforms>AnyCPU;x64</Platforms>
-    <PackageReleaseNotes>Updated the array casting logic to use reflexion instead of runtime binding.</PackageReleaseNotes>
+    <PackageReleaseNotes>Release of the proxy functionality.
+Instead of just wrapping over the Oracle UDT requirements it now overlaps most of the user facing parts, using its own attributes and creating a runtime dll with proxies that implement all of Oracle's requeriments allowing the user to keep its POCOs clean.</PackageReleaseNotes>
     <RepositoryUrl>https://github.com/roysanchez/ServForOracle/</RepositoryUrl>
     <PackageProjectUrl>https://github.com/roysanchez/ServForOracle/</PackageProjectUrl>
     <PackageTags>Oracle; ODP.NET Native; Oracle UDT</PackageTags>
@@ -20,7 +21,7 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" />
   <ItemGroup>
-    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.0.0-beta-63127-02" PrivateAssets="All"/>
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.0.0-beta-63127-02" PrivateAssets="All" />
     <PackageReference Include="Microsoft.CSharp" Version="4.5.0" />
     <PackageReference Include="Oracle.DataAccess">
       <ExcludeAssets>All</ExcludeAssets>
