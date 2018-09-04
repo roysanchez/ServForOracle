@@ -11,8 +11,20 @@ using System.Threading.Tasks;
 
 namespace ServForOracle.Models
 {
+    /// <summary>
+    /// Implements all the oracle requirements for handling of UDT Types (Objects) 
+    /// </summary>
     public abstract class TypeModel : TypeFactory, IOracleCustomType
     {
+        /// <summary>
+        /// It's used on the creation of the controller for generated types on 
+        /// <see cref="ServForOracle.Internal.ProxyFactory.AddConstructor(TypeBuilder)"/>
+        /// </summary>
+        public TypeModel()
+        {
+
+        }
+
         void ProcessProperties(Action<PropertyInfo, OracleObjectMappingAttribute> process)
         {
             var properties = GetType().GetRuntimeProperties();

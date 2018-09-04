@@ -8,6 +8,9 @@ using Oracle.DataAccess.Client;
 
 namespace ServForOracle.Models
 {
+    /// <summary>
+    /// Common implementation of the Oracle UDT handling, for both objects and collections
+    /// </summary>
     public abstract class TypeFactory : IOracleCustomTypeFactory, INullable
     {
         public IOracleCustomType CreateObject()
@@ -15,6 +18,10 @@ namespace ServForOracle.Models
             return Activator.CreateInstance(this.GetType()) as IOracleCustomType;
         }
 
+        /// <summary>
+        /// Must be implemented on the base class
+        /// </summary>
+        /// <exception cref="NotImplementedException"></exception>
         public static Object Null
         {
             get

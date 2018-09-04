@@ -1,33 +1,25 @@
 ﻿using Oracle.DataAccess.Client;
 using Oracle.DataAccess.Types;
 using ServForOracle.Models;
+using ServForOracle.Tools;
 using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
 using System.Reflection;
+using System.Reflection.Emit;
 using System.Text;
 using System.Threading.Tasks;
 
 namespace ServForOracle.Internal
 {
+    /// <summary>
+    /// Handles all the common interactions (convertion, transformation, extracting values, etc...)
+    ///  between the <see cref="Param{T}"/> objects and the <see cref="OracleParameter"/> objects
+    /// </summary>
     internal static class ParamHandler
     {
         private const int VARCHAR_MAX_SIZE = 32000;
-        /// <summary>
-        /// Read-Only dictionary with all the object types for the OracleDB.
-        /// The Key is the Type with the OracleType Attribute.
-        /// The Value is the Oracle Type description.
-        /// </summary>
-        /// <example>[{ClientClass, "HR.CLIENT_OBJ"}, {SalesClass, "HR.SALES_OBJ"}]</example>
-        public static Dictionary<Type, string> Models { get; }
-        /// <summary>
-        /// Read-Only dictionary with all the collections types for the OracleDB.
-        /// The Key is the Type with the Oracle Array Attribute or their collectionType.
-        /// The Value is the Oracle Type description.
-        /// </summary>
-        /// <example>[{IEnumerable<string>', "HR.STRING_LIST"}, {IEnumerable<int>, "HR.NUMBER_LIST"}]</example>
-        public static Dictionary<Type, string> Collections { get; }
 
         //TODO Move the message to a resource
         public static string InvalidClassMessage { get; }
@@ -37,76 +29,58 @@ namespace ServForOracle.Internal
         public static string TypeNotConfiguredMessage { get; }
             = "The type {0} is not configured for automatic casting, please open an issue on github. "
                 + "In the mean time, you can use the OracleDbType Param create overload to solve it.";
+        
+        //TODO Check the property type before setting the value, possible move this to the Proxy Class
+        private static object ConvertToProxy<T>(object value)
+        {
+            var userType = typeof(T);
+            if (ProxyFactory.Proxies.TryGetValue(userType, out var proxy) && value != null)
+            {
+                var proxyType = proxy.ProxyType;
+                var instance = Activator.CreateInstance(proxyType);
+
+                foreach (var prop in proxyType.GetProperties())
+                {
+                    var userProp = userType.GetRuntimeProperty(prop.Name);
+                    if (userProp != null)
+                    {
+                        prop.SetValue(instance, userProp.GetValue(value));
+                    }
+                }
+
+                return instance;
+            }
+
+            return null;
+        }
 
         /// <summary>
-        /// Looks for all the assemblies in the current AppDomain that aren't either Microsoft, Oracles or the System.
-        /// In those assemblies then selects all the instantiable classes that have the OracleCustomTypeMapping Attribute
+        /// Checks if the <paramref name="type"/> is Assignable from any of the values in <see cref="ProxyFactory.CollectionProxies"/>
         /// </summary>
-        static ParamHandler()
+        /// <param name="type">The <see cref="IEnumerable{T}"/> to check if a proxy exists</param>
+        /// <param name="collectionUdTName">The Oracle UDT Collection Name if it exists for the <paramref name="type"/></param>
+        /// <returns>True if the <paramref name="collectionUdTName"/> is not empty</returns>
+        private static bool TryGetCollectionUdtName(Type type, out string collectionUdTName)
         {
-            var executing = Assembly.GetExecutingAssembly();
-
-            var assemblies =
-                    from assembly in AppDomain.CurrentDomain.GetAssemblies()
-                    where assembly != executing
-                       && !assembly.GlobalAssemblyCache
-                       //&& assembly.Location == executing.Location
-                       && !assembly.FullName.StartsWith("Microsoft")
-                       && !assembly.FullName.StartsWith("System")
-                       && !assembly.FullName.StartsWith("Oracle")
-                       && !assembly.FullName.StartsWith("xunit")
-                    select assembly;
-
-            var types = assemblies.SelectMany(a => a.GetTypes())
-                        .Where(t => t.IsClass && !t.IsSealed && !t.IsAbstract);
-
-            Models = types.Where(t => t.IsSubclassOf(typeof(TypeModel)))
-                        .ToDictionary(t => t, t => GetOracleTypeNameFromAttribute(t));
-
-
-            var tempCol = types
-                .Where(t => IsCollectionType(t.BaseType))
-                .ToDictionary(t => t, t => GetOracleTypeNameFromAttribute(t));
-
-            Collections = new Dictionary<Type, string>(tempCol);
-
-            //Creates the IEnumerable<Type> for arrays
-            foreach (var keyValue in tempCol)
-            {
-                var generic = typeof(IEnumerable<>).MakeGenericType(keyValue.Key.BaseType.GetGenericArguments()[0]);
-                Collections.Add(generic, keyValue.Value);
-            }
-        }
-
-        private static bool IsCollectionType(Type type)
-        {
-            if (type == null) return false;
-            return type.IsGenericType && type.GetGenericTypeDefinition() == typeof(CollectionModel<>);
-        }
-
-        private static bool TryGetCollectionKeyValue(Type t, out string value)
-        {
-            value = Collections
-                        .Where(c => c.Key.IsAssignableFrom(t))
+            collectionUdTName = ProxyFactory.CollectionProxies
+                        .Where(c => c.Key.IsAssignableFrom(type))
                         .Select(c => c.Value)
                         .FirstOrDefault();
 
-            return !string.IsNullOrEmpty(value);
+            return !string.IsNullOrWhiteSpace(collectionUdTName);
         }
 
         /// <summary>
-        /// Checks if the type specified was previously registered on the constructor (the linq query) as it otherwise means
-        /// the object was dynamically created and the OracleDataAccess Library wouldn't find it and it would crash.
-        /// This is a pre-check as a way to control the exception, and throw it here instead of the Oracle library that would obfuscate it.
+        /// Checks if the type is either from the CLR or a generated proxy.
         /// </summary>
         /// <param name="type">The Type to check</param>
-        /// <returns>True or False indicating if the type was previously registered on the constructor</returns>
+        /// <returns>if the type specified can be used with the library</returns>
         public static bool IsValidParameterType(Type type)
         {
             if (type.IsValueType
                 || type == typeof(string)
-                || Models.Any(c => c.Key == type)
-                || TryGetCollectionKeyValue(type, out var collectionValue)
+                || ProxyFactory.Proxies.ContainsKey(type)
+                || TryGetCollectionUdtName(type, out var collectionValue)
                 )
                 return true;
 
@@ -116,28 +90,20 @@ namespace ServForOracle.Internal
         /// <summary>
         /// Creates an oracle parameter as a return value
         /// </summary>
-        /// <typeparam name="T">The type spected to be returned by the function</typeparam>
-        /// <returns>An OracleParameter configured for the return of the specified type</returns>
+        /// <typeparam name="T">The type expected to be returned by the function</typeparam>
+        /// <returns>An <see cref="OracleParameter"/> configured for the return of the specified type</returns>
         public static OracleParameter CreateReturnParam<T>()
         {
             return CreateOracleParam(typeof(T), null, ParameterDirection.ReturnValue);
         }
 
         /// <summary>
-        /// Creates an OracleParameter with the specfied information
+        /// Creates an <see cref="OracleParameter"/> from the param
         /// </summary>
-        /// /// <typeparam name="T">The type of the oracle parameter value</typeparam>
-        /// <param name="parameter">The Param to transform into an OracleParameter object</param>
-        /// <remarks>This method is call through Reflexion on the ServiceForOracle class</remarks>
-        /// <returns></returns>
-        //public static OracleParameter CreateOracleParam(Param parameter)
-        //{
-        //    if (parameter == null)
-        //        throw new ArgumentNullException(nameof(parameter));
-
-        //    return CreateOracleParam(parameter.Type, parameter.Value, parameter.ParamDirection, parameter.OracleType);
-        //}
-
+        /// <typeparam name="T">The <see cref="Type"/> of the oracle parameter value</typeparam>
+        /// <param name="parameter">The <see cref="Param{T}"/> to transform into an <see cref="OracleParameter"/> object</param>
+        /// <remarks>This method is called through Reflexion on the <see cref="ServiceForOracle"/> class</remarks>
+        /// <returns>A new <see cref="OracleParameter"/> configured with the <see cref="Param{T}"/> value</returns>
         public static OracleParameter CreateOracleParam<T>(Param<T> parameter)
         {
             if (parameter == null)
@@ -157,40 +123,27 @@ namespace ServForOracle.Internal
                     break;
             }
 
-            return CreateOracleParam(typeof(T), parameter.Value, paramDirection, parameter.OracleType);
-
+            return CreateOracleParam(typeof(T), ConvertToProxy<T>(parameter.Value), paramDirection, parameter.OracleType);
+            //return CreateOracleParam(typeof(T), parameter.Value, paramDirection, parameter.OracleType);
             //return CreateOracleParam(parameter.Type, parameter.Value, parameter.ParamDirection, parameter.OracleType);
         }
 
-        ///// <summary>
-        ///// Creates an OracleParameter with the specfied information
-        ///// </summary>
-        ///// <typeparam name="T">The type of the oracle parameter value</typeparam>
-        ///// <param name="type">The type that the value represents (in case the value is null)</param>
-        ///// <param name="value">The value to send</param>
-        ///// <param name="paramType">The direction of the parameter (IN, OUT, INOUT)</param>
-        ///// <param name="oracleType">In the case where the caller wants to set explicitly the type of the oracleDb to use</param>
-        ///// <returns>Returns an OracleParameter with the data specified.</returns>
-        //public static OracleParameter CreateOracleParam<T>(Type type, T value, ParamDirection paramType,
-        //        OracleDbType? oracleType = null)
-        //{
-
-        //}
-
         /// <summary>
-        /// Creates an OracleParameter based on the CLR types, following the mapping table defined here:
+        /// Creates an <see cref="OracleParameter"/> based on the CLR types, following the mapping table defined here:
         /// //docs.oracle.com/database/121/ODPNT/featUDTs.htm#BABIFHGJ
         /// </summary>
-        /// <param name="type">The CLR type to try and map</param>
-        /// <param name="value">The value that will be assign to the OracleParameter (can be null if the direction is Output)</param>
+        /// <param name="type">The CLR <see cref="Type"/> to try and map</param>
+        /// <param name="value">The value that will be assign to the <see cref="OracleParameter"/>
+        /// (can be null only if the direction is <see cref="ParameterDirection.Output"/>)</param>
         /// <param name="direction">The direction of the OracleParameter (IN, OUT, INOUT)</param>
         /// <param name="oracleType">For advance uses, specify directly the OracleDbType to use instead of the standard mapping</param>
         /// <returns>An OracleParameter with the expected OracleDbType that closely maps to the CLR type specified.</returns>
         private static OracleParameter CreateOracleParam(Type type, object value, ParameterDirection direction,
             OracleDbType? oracleType = null)
         {
-            if (type == null)
-                throw new ArgumentNullException(nameof(type));
+
+            if(type == null)
+                throw new ArgumentNullException(nameof(type), "The type for the Oracle Parameter can not be null");
 
             object _value = value;
 
@@ -261,14 +214,14 @@ namespace ServForOracle.Internal
                     param.Size = default(int);
                 }
             }
-            else if (Models.TryGetValue(type, out var modelValue))
+            else if (ProxyFactory.Proxies.TryGetValue(type, out var proxy))
             {
-                param.UdtTypeName = modelValue;
+                param.UdtTypeName = proxy.UdtName;
                 param.OracleDbType = OracleDbType.Object;
             }
-            else if (TryGetCollectionKeyValue(type, out var collectionValue))
+            else if (TryGetCollectionUdtName(type, out var collectionUdtName))
             {
-                param.UdtTypeName = collectionValue;
+                param.UdtTypeName = collectionUdtName;
                 param.OracleDbType = OracleDbType.Array;
             }
             else
@@ -278,12 +231,12 @@ namespace ServForOracle.Internal
             param.Value = _value;
             return param;
         }
-
+        
         /// <summary>
-        /// Extracts the oracle type name from the OracleCustomTypeMapping Attribute
+        /// Extracts the oracle UDT type name from the <see cref="UDTNameAttribute"/>
         /// </summary>
-        /// <param name="type">The type to extract the attribute value from</param>
-        /// <returns>A string with the name of the Oracle UDT in the attribute, otherwise null</returns>
+        /// <param name="type">The <see cref="Type"/> to extract the attribute value from</param>
+        /// <returns>A string with the name of the Oracle UDT in the <see cref="UDTNameAttribute"/>, otherwise null</returns>
         private static string GetOracleTypeNameFromAttribute(Type type)
         {
             //TODO throw exception when null
@@ -292,19 +245,22 @@ namespace ServForOracle.Internal
 
             var oracleAttribute = (
                     from attr in type.GetCustomAttributes(false)
-                    where attr.GetType() == typeof(OracleCustomTypeMappingAttribute)
-                    select attr as OracleCustomTypeMappingAttribute
+                    where attr.GetType() == typeof(UDTNameAttribute)
+                    select attr as UDTNameAttribute
                 ).FirstOrDefault();
 
-            return oracleAttribute?.UdtTypeName;
+            return oracleAttribute?.Name;
         }
 
         /// <summary>
-        /// Simple abstraction for the common oracle interface that handles nullable types
+        /// Simple abstraction for the common oracle interface that handles <see cref="Nullable{T}"/> types
         /// </summary>
-        /// <param name="param">Oracle param object</param>
-        /// <param name="isNullable">If the type of the result is nullable</param>
-        /// <returns>The oracle param value</returns>
+        /// <param name="param"><see cref="OracleParameter"/> object</param>
+        /// <param name="isNullable">If the result can be null</param>
+        /// <returns>The <see cref="OracleParameter"/> value</returns>
+        /// <exception cref="InvalidCastException">If the parameter <paramref name="isNullable"/> is false but
+        /// the <paramref name="param"/> is null</exception>
+        /// <seealso cref="ExtractValue(dynamic)"/>
         private static object ExtractNullableValue(dynamic param, bool isNullable)
         {
             if (isNullable)
@@ -316,10 +272,12 @@ namespace ServForOracle.Internal
         }
 
         /// <summary>
-        /// Simple abstraction for the common oracle interface
+        /// Simple abstraction over the common oracle interface, extracts the value from <see cref="INullable"/> types
         /// </summary>
-        /// <param name="param">Oracle Param object</param>
-        /// <returns>The oracle param value</returns>
+        /// <param name="param">An <see cref="OracleParameter"/> object</param>
+        /// <returns>The <see cref="OracleParameter"/> value</returns>
+        /// <exception cref="InvalidCastException">If the </exception>
+        /// <seealso cref="ExtractNullableValue(dynamic, bool)"/>
         private static object ExtractValue(dynamic param)
         {
             if (!(param is Oracle.DataAccess.Types.INullable))
@@ -335,10 +293,10 @@ namespace ServForOracle.Internal
         /// Converts the oracle type to the corresponding dotnet type, as specified in the following spec:
         /// <see cref="https://docs.oracle.com/database/121/ODPNT/featUDTs.htm#BABIFHGJ"/>
         /// </summary>
-        /// <typeparam name="T">The type expected, if Object is specified then it will always return the value</typeparam>
-        /// <param name="oracleParam">The Oracle parameter to convert</param>
-        /// <exception cref="InvalidCastException">when the oracle parameter can't be cast to the type specified.</exception>
-        /// <returns>The oracle parameter with the correct object</returns>
+        /// <typeparam name="T">The type expected, if <see cref="object"/> is specified then it will always return the value</typeparam>
+        /// <param name="oracleParam">The <see cref="OracleParameter"/> to convert from</param>
+        /// <exception cref="InvalidCastException">when the <paramref name="oracleParam"/> can't be casted to the expected <typeparamref name="T"/>.</exception>
+        /// <returns>The oracle parameter transformed to the correct <typeparamref name="T"/></returns>
         public static T ConvertOracleParameterToBaseType<T>(OracleParameter oracleParam)
         {
             var retType = typeof(T);
@@ -348,7 +306,7 @@ namespace ServForOracle.Internal
             if (type == retType)
             {
                 //Check if property IsNull exists
-                var prop = type.GetProperty("IsNull");
+                var prop = type.GetProperty(nameof(TypeFactory.IsNull));
                 if (prop != null)
                 {
                     dynamic val = prop.GetValue(oracleParam.Value);
@@ -434,7 +392,7 @@ namespace ServForOracle.Internal
                     ExtractNullableValue(timestampTZ, isNullable);
                     break;
                 default:
-                    if (TryGetCollectionKeyValue(retType, out var oracleType))
+                    if (TryGetCollectionUdtName(retType, out var oracleType))
                     {
                         var prop = type.GetProperty("Array");
                         value = prop.GetValue(oracleParam.Value);
