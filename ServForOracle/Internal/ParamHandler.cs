@@ -25,57 +25,7 @@ namespace ServForOracle.Internal
         public static string TypeNotConfiguredMessage { get; }
             = "The type {0} is not configured for automatic casting, please open an issue on github. "
                 + "In the mean time, you can use the OracleDbType Param create overload to solve it.";
-
-        /// <summary>
-        /// Looks for all the assemblies in the current AppDomain that aren't either Microsoft, Oracles or the System.
-        /// In those assemblies then selects all the instantiable classes that have the OracleCustomTypeMapping Attribute
-        /// </summary>
-        static ParamHandler()
-        {
-            //var executing = Assembly.GetExecutingAssembly();
-
-            //var assemblies =
-            //        from assembly in AppDomain.CurrentDomain.GetAssemblies()
-            //        where assembly != executing
-            //           && !assembly.GlobalAssemblyCache
-            //           //&& assembly.Location == executing.Location
-            //           && !assembly.FullName.StartsWith("Microsoft")
-            //           && !assembly.FullName.StartsWith("System")
-            //           && !assembly.FullName.StartsWith("Oracle")
-            //           && !assembly.FullName.StartsWith("xunit")
-            //        select assembly;
-
-            //var types = assemblies.SelectMany(a => a.GetTypes())
-            //            .Where(t => t.IsClass && !t.IsSealed && !t.IsAbstract);
-
-            //Proxies = new Dictionary<Type, Type>();
-            //Models = new Dictionary<Type, string>();
-
-            //foreach (var type in ProxyFactory.Proxies)//types.Where(t => t.GetCustomAttribute<UDTNameAttribute>() != null))
-            //{
-            //    //var udtName = GetOracleTypeNameFromAttribute(type);
-            //    //var proxyType = ProxyFactory.CreateProxyType(type, udtName);
-
-            //    //Proxies.Add(type, proxyType);
-            //    //Models.Add(proxyType, udtName);
-            //    Models.Add(type.Value, )
-            //}
-
-            //var tempCol = types
-            //    .Where(t => IsCollectionType(t.BaseType))
-            //    .ToDictionary(t => t, t => GetOracleTypeNameFromAttribute(t));
-
-            //Collections = new Dictionary<Type, string>(tempCol);
-
-            ////Creates the IEnumerable<Type> for arrays
-            //foreach (var keyValue in tempCol)
-            //{
-            //    var generic = typeof(IEnumerable<>).MakeGenericType(keyValue.Key.BaseType.GetGenericArguments()[0]);
-            //    Collections.Add(generic, keyValue.Value);
-            //}
-
-        }
-
+        
         //TODO Check the property type before setting the value, possible move this to the Proxy Class
         private static object ConvertToProxy<T>(object value)
         {
