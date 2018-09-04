@@ -106,7 +106,7 @@ static async Task Main(string[] args)
 
     var parameter = Param.Input(new OrderItem { Id = 1 });
 
-    var orderList = serv.ExecuteFunctionAsync<OrderItem[]>("oe.TestFunction", parameter);
+    var orderList = await serv.ExecuteFunctionAsync<OrderItem[]>("oe.TestFunction", parameter);
 	
     foreach(var order in orderList)
     {
