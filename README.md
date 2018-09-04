@@ -39,12 +39,12 @@ in C# a mapped object would look like this:
 public class OrderItem
 {
     [UDTProperty("order_id")]
-	public long Id { get; set; }
+    public long Id { get; set; }
 
-	[UDTProperty("order_name")]
-	public string Name { get; set; }
+    [UDTProperty("order_name")]
+    public string Name { get; set; }
 
-	public int quantity { get; set; }
+    public int quantity { get; set; }
 }
 ```
 
@@ -86,16 +86,16 @@ Using the POCO created above you could execute the following example function as
 
 ```sql
 CREATE OR REPLACE FUNCTION oe.TestFunction(dummy oe.order_item_typ)
-	RETURNS oe.order_item_list_typ
+    RETURNS oe.order_item_list_typ
 IS
-	returnList oe.order_item_list_typ := oe.order_item_list_typ();
+    returnList oe.order_item_list_typ := oe.order_item_list_typ();
 BEGIN
-	returnList.Extend;
-	returnList(returnList.Last) := oe.order_item_typ(1, "Test 1", 10);
-	returnList.Extend;
-	returnList(returnList.Last) := oe.order_item_typ(2, "Test 2", 20);
+    returnList.Extend;
+    returnList(returnList.Last) := oe.order_item_typ(1, "Test 1", 10);
+    returnList.Extend;
+    returnList(returnList.Last) := oe.order_item_typ(2, "Test 2", 20);
 
-	return returnList;
+   return returnList;
 END TestFunction;
 ```
 
