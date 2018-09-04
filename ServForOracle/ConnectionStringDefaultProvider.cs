@@ -6,6 +6,9 @@ using System.Threading.Tasks;
 
 namespace ServForOracle
 {
+    /// <summary>
+    /// Simple connection string wrapper so that it can be specified through depedency injection
+    /// </summary>
     public class ConnectionStringDefaultProvider : IConnectionStringProvider
     {
         public ConnectionStringDefaultProvider(string connectionString)

@@ -17,9 +17,14 @@ namespace ServForOracle
 {
     public abstract class ServiceForOracle
     {
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="connectionString"></param>
+        /// <exception cref="ArgumentNullException">If either the <paramref name="connectionString"/> or its 
+        /// <see cref="IConnectionStringProvider.Value"/> property is null</exception>
         public ServiceForOracle(IConnectionStringProvider connectionString)
         {
-            //ConnectionString = connectionString.Value;
             if (connectionString == null || string.IsNullOrEmpty(connectionString.Value))
                 throw new ArgumentNullException(nameof(connectionString));
 
@@ -27,21 +32,36 @@ namespace ServForOracle
             connectionCreatedExternally = false;
         }
 
+        /// <summary>
+        /// Use a pre-existing Oracle connection
+        /// </summary>
+        /// <param name="oracleConnection"></param>
         public ServiceForOracle(OracleConnection oracleConnection)
         {
             DbConnection = oracleConnection;
             connectionCreatedExternally = true;
         }
         
+        /// <summary>
+        /// Oracle connection used to execute all the commands
+        /// </summary>
         public OracleConnection DbConnection { get; private set; }
 
 
         private readonly bool connectionCreatedExternally;
         private static readonly MethodInfo ConverterBase = typeof(ParamHandler).GetMethod("CreateOracleParam");
 
+        /// <summary>
+        /// Opens the <see cref="OracleConnection"/> and creates a <see cref="OracleCommand"/>
+        /// </summary>
+        /// <param name="proc">The procedure or function to execute</param>
+        /// <param name="type">The type of the command, either a procedure/function or DDL query</param>
+        /// <returns>The new command</returns>
+        /// <remarks>If the connection was created externally it doesn't close the connection after the command is executed</remarks>
+        /// <exception cref="ArgumentNullException">If the <paramref name="proc"/> is null or whitespace</exception>
         private async Task<OracleCommand> CreateCommandAsync(string proc, CommandType type)
         {
-            if (string.IsNullOrEmpty(proc))
+            if (string.IsNullOrWhiteSpace(proc))
                 throw new ArgumentNullException(nameof(proc));
 
             await DbConnection.OpenAsync().ConfigureAwait(false);
@@ -135,8 +155,7 @@ namespace ServForOracle
             {
                 var genericMethod = ConverterBase.MakeGenericMethod(param.Type);
                 var oracleParam = genericMethod.Invoke(null, new[] { param }) as OracleParameter;
-
-                //var oracleParam = ParamHandler.CreateOracleParam(param);
+                
                 cmd.Parameters.Add(oracleParam);
 
                 if (oracleParam.Direction == ParameterDirection.Output || oracleParam.Direction == ParameterDirection.InputOutput)
@@ -161,7 +180,7 @@ namespace ServForOracle
         }
 
         /// <summary>
-        /// Loads the Oracle.DataAccess library in case it couldn't use the default version
+        /// Loads the Oracle.DataAccess library in case it couldn't use the default version and the generated proxy classes
         /// </summary>
         /// <remarks>stackoverflow.com/questions/277817/compile-a-version-agnostic-dll-in-net</remarks>
         static ServiceForOracle()
