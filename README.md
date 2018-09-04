@@ -6,17 +6,16 @@ The library depends on the native ODP.NET client because is the only one that ha
 
 Oracle doesn't publish the native version on nuget so you'll need to get it through their Portal, I recommend downloading the ODAC Runtime (http://www.oracle.com/technetwork/topics/dotnet/downloads/odacdeploy-4242173.html) for the bitness of your dev PC and your deployment server.
 
-The only file that you need to reference is Oracle.DataAccess, but in order for it to work your app needs to be able to find the following dlls:
+The only file that you need to reference is Oracle.DataAccess, but in order for it to work your app needs to be able to find the following dlls (for example, by placing them on the bin folder):
 * oci.dll
 * oraocci12.dll
 * oraociei12.dll
 * oraons.dll
 * OraOps12.dll
 
-Remember these dll are for the unmanaged (native) version not the managed one, that means that when compiling you need to specify either x64 or x86 in Visual Studio otherwise you'll get a BadImageException.
+Note: These are for the Oracle 12.1 Client, they vary depending on the client version and the functionality you want to use.
 
-Note: This are for the Oracle 12.1 Client, they vary depending on the client version and the functionality you want to use.
-
+Remember these are for the unmanaged (native) version not the managed one, meaning that when compiling you'll need to specify either x64 or x86 in Visual Studio otherwise you'll get a BadImageException.
 
 #### Use Guide
 
