@@ -8,8 +8,18 @@ using Oracle.DataAccess.Client;
 
 namespace ServForOracle.Models
 {
+    /// <summary>
+    /// Implements all the oracle requirements for handling of UDT Collection Types (Lists/Varrays) 
+    /// </summary>
+    /// <typeparam name="T">The type that has <see cref="OracleCustomTypeMappingAttribute"/> and 
+    /// implements the <see cref="TypeModel"/>
+    /// </typeparam>
     public abstract class CollectionModel<T> : TypeFactory, IOracleCustomType, IOracleArrayTypeFactory
     {
+        /// <summary>
+        /// It's used on the creation of the controller for generated types on 
+        /// <see cref="ServForOracle.Internal.ProxyFactory.AddConstructor(System.Reflection.Emit.TypeBuilder)"/>
+        /// </summary>
         public CollectionModel()
         {
 
