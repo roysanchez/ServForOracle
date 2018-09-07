@@ -49,12 +49,30 @@ namespace ServForOracle
             await base.ExecuteFunctionAsync<T>(function, parameters);
 
         /// <summary>
+        /// Executes an Oracle Function
+        /// </summary>
+        /// <typeparam name="T">The espected result of the oracle function</typeparam>
+        /// <param name="function">The function to execute, which follows this format: schema.function or schema.package.function</param>
+        /// <param name="parameters">The parameters of the function  whether IN, OUT or IN OUT</param>
+        /// <remarks>The OUT and IN OUT parameters get their values set by this method</remarks>
+        /// <returns>The result of the execution and containing the return value if it is successful</returns>
+        public new T ExecuteFunction<T>(string function, params Param[] parameters) =>
+            base.ExecuteFunction<T>(function, parameters);
+
+        /// <summary>
         /// Executes the DDL specified
         /// </summary>
         /// <param name="ddl">The DDL to execute</param>
         /// <returns>A task indicating he result of the execution</returns>
         public async new Task ExecuteDDLAsync(string ddl) => 
             await base.ExecuteDDLAsync(ddl);
+
+        /// <summary>
+        /// Executes the DDL specified
+        /// </summary>
+        /// <param name="ddl">The DDL to execute</param>
+        public new void ExecuteDDL(string ddl) =>
+            base.ExecuteDDL(ddl);
 
         /// <summary>
         /// Executes an Oracle procedure
@@ -65,5 +83,14 @@ namespace ServForOracle
         /// <returns>A task indicating the result of the execution</returns>
         public async new Task ExecuteProcedureAsync(string procedure, params Param[] parameters) => 
             await base.ExecuteProcedureAsync(procedure, parameters);
+
+        /// <summary>
+        /// Executes an Oracle procedure
+        /// </summary>
+        /// <param name="procedure">The procedure to run, with the format schema.procedure or schema.package.procedure</param>
+        /// <param name="parameters">The parameters for the procedure, whether IN, OUT or IN OUT</param>
+        /// <remarks>The OUT and IN OUT parameters get their values set by this method</remarks>
+        public new void ExecuteProcedure(string procedure, params Param[] parameters) =>
+            base.ExecuteProcedure(procedure, parameters);
     }
 }

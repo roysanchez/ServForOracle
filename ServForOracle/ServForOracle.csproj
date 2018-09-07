@@ -2,7 +2,7 @@
   <PropertyGroup>
     <TargetFramework>net461</TargetFramework>
     <PackageId>ServForOracle</PackageId>
-    <Version>6.0.3</Version>
+    <Version>6.1.1</Version>
     <Title>ServForOracle - Oracle Package and Type wrapper for .NET</Title>
     <PlatformTarget>AnyCPU</PlatformTarget>
     <Authors>Roy Sánchez</Authors>
@@ -10,8 +10,9 @@
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
     <Copyright>Copyright 2018 (c) Roy Sanchez. All rights reserved.</Copyright>
     <Platforms>AnyCPU;x64</Platforms>
-    <PackageReleaseNotes>Release of the proxy functionality.
-Instead of just wrapping over the Oracle UDT requirements it now overlaps most of the user facing parts, using its own attributes and creating a runtime dll with proxies that implement all of Oracle's requeriments allowing the user to keep its POCOs clean.</PackageReleaseNotes>
+    <PackageReleaseNotes>
+      Added synchronous operations to the ServiceForOracle classes.
+    </PackageReleaseNotes>
     <RepositoryUrl>https://github.com/roysanchez/ServForOracle/</RepositoryUrl>
     <PackageProjectUrl>https://github.com/roysanchez/ServForOracle/</PackageProjectUrl>
     <PackageTags>Oracle; ODP.NET Native; Oracle UDT</PackageTags>
