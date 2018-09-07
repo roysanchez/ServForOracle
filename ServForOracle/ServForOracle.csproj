@@ -2,7 +2,7 @@
   <PropertyGroup>
     <TargetFramework>net461</TargetFramework>
     <PackageId>ServForOracle</PackageId>
-    <Version>6.1.2</Version>
+    <Version>6.3.1</Version>
     <Title>ServForOracle - Oracle Package and Type wrapper for .NET</Title>
     <PlatformTarget>AnyCPU</PlatformTarget>
     <Authors>Roy Sánchez</Authors>
@@ -11,7 +11,7 @@
     <Copyright>Copyright 2018 (c) Roy Sanchez. All rights reserved.</Copyright>
     <Platforms>AnyCPU;x64</Platforms>
     <PackageReleaseNotes>
-      Added missing methods to the IServiceForOracle interface.
+      Added initial implementation of the proxy transform, uses parts of automapper to go from proxy to userType.
     </PackageReleaseNotes>
     <RepositoryUrl>https://github.com/roysanchez/ServForOracle/</RepositoryUrl>
     <PackageProjectUrl>https://github.com/roysanchez/ServForOracle/</PackageProjectUrl>
@@ -22,6 +22,7 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" />
   <ItemGroup>
+    <PackageReference Include="AutoMapper" Version="7.0.1" />
     <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.0.0-beta-63127-02" PrivateAssets="All" />
     <PackageReference Include="Microsoft.CSharp" Version="4.5.0" />
     <PackageReference Include="Oracle.DataAccess">

@@ -37,7 +37,7 @@ namespace ServForOracle.Internal
         /// The Value is the Oracle UDT Collection Name.
         /// </summary>
         /// <value>[{<see cref="IEnumerable{Type}"/>, "HR.STRING_LIST"}, {<see cref="IEnumerable{Type}"/>, "HR.NUMBER_LIST"}]</value>
-        public static Dictionary<Type, string> CollectionProxies { get; private set; }
+        public static Dictionary<Type, (Type ProxyCollectionType, string UdtCollectionName)> CollectionProxies { get; private set; }
         /// <summary>
         /// Used to check if the UDT type is registered
         /// </summary>
@@ -51,7 +51,7 @@ namespace ServForOracle.Internal
         static ProxyFactory()
         {
             Proxies = new Dictionary<Type, (Type proxyType, string udtName)>();
-            CollectionProxies = new Dictionary<Type, string>();
+            CollectionProxies = new Dictionary<Type, (Type ProxyCollectionType, string UdtCollectionName)>();
             UDTLists = new HashSet<string>();
             
             var executing = Assembly.GetExecutingAssembly();
@@ -184,8 +184,8 @@ namespace ServForOracle.Internal
 
             //Checks to see if the type/udtname combination exists.
             var exists = CollectionProxies
-                .Where(c => c.Key.GetCollectionUnderType() == underlyingUserType && c.Value == udtCollectionName)
-                .Select(c => c.Key)
+                .Where(c => c.Key == underlyingUserType && c.Value.UdtCollectionName == udtCollectionName)
+                .Select(c => c.Value.ProxyCollectionType)
                 .FirstOrDefault();
             
             if (exists != null)
@@ -208,12 +208,17 @@ namespace ServForOracle.Internal
             var generic = typeof(CollectionModel<>).MakeGenericType(new Type[] { underlyingProxyType });
             var proxyTypeDefinition = dynamicModule.DefineType(underlyingUserType.Name + "ListProxy", TypeAttributes.Public, generic);
 
+            var attrCtorInfo = typeof(OracleCustomTypeMappingAttribute).GetConstructor(new Type[] { typeof(string) });
+            var attrBuilder = new CustomAttributeBuilder(attrCtorInfo, new object[] { udtCollectionName });
+
+            proxyTypeDefinition.SetCustomAttribute(attrBuilder);
+
             AddNullProperty(proxyTypeDefinition, AddConstructor(proxyTypeDefinition));
             proxyTypeDefinition.CreateType();
 
             var arrayProxy = typeof(IEnumerable<>).MakeGenericType(new Type[] { underlyingProxyType });
 
-            CollectionProxies.Add(arrayProxy, udtCollectionName);
+            CollectionProxies.Add(underlyingUserType, (arrayProxy, udtCollectionName));
 
             return arrayProxy;
         }

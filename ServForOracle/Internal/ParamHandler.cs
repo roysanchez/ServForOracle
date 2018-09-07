@@ -3,6 +3,7 @@ using Oracle.DataAccess.Types;
 using ServForOracle.Models;
 using ServForOracle.Tools;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
@@ -29,29 +30,77 @@ namespace ServForOracle.Internal
         public static string TypeNotConfiguredMessage { get; }
             = "The type {0} is not configured for automatic casting, please open an issue on github. "
                 + "In the mean time, you can use the OracleDbType Param create overload to solve it.";
-        
-        //TODO Check the property type before setting the value, possible move this to the Proxy Class
-        private static object ConvertToProxy<T>(object value)
+
+        /// <summary>
+        /// Automapper can't convert to generated types, in the meanwhile this will do
+        /// </summary>
+        /// <param name="value">The value to try an convert</param>
+        /// <param name="userType">The type of the <paramref name="value"/></param>
+        /// <returns>If its a proxy then returns the converted type otherwise is left as is</returns>
+        /// <seealso cref="ConvertToProxy(object, Type)"/>
+        private static object ConvertToProxy<T>(T value)
         {
-            var userType = typeof(T);
-            if (ProxyFactory.Proxies.TryGetValue(userType, out var proxy) && value != null)
+            return ConvertToProxy(value, typeof(T));
+        }
+
+        /// <summary>
+        /// Automapper can't convert to generated types, in the meanwhile this will do
+        /// </summary>
+        /// <param name="value">The value to try an convert</param>
+        /// <param name="userType">The type of the <paramref name="value"/></param>
+        /// <returns>If its a proxy then returns the converted type otherwise is left as is</returns>
+        /// <seealso cref="ConvertToProxy{T}(T)"/>
+        private static object ConvertToProxy(object value, Type userType, Type proxyType = null)
+        {
+            if (value != null)
             {
-                var proxyType = proxy.ProxyType;
-                var instance = Activator.CreateInstance(proxyType);
-
-                foreach (var prop in proxyType.GetProperties())
+                (Type ProxyType, string) proxy = (null, null);
+                if (proxyType != null || ProxyFactory.Proxies.TryGetValue(userType, out proxy))
                 {
-                    var userProp = userType.GetRuntimeProperty(prop.Name);
-                    if (userProp != null)
-                    {
-                        prop.SetValue(instance, userProp.GetValue(value));
-                    }
-                }
+                    var type = proxyType ?? proxy.ProxyType;
+                    var instance = Activator.CreateInstance(type);
 
-                return instance;
+                    foreach (var prop in type.GetProperties())
+                    {
+                        var userProp = userType.GetRuntimeProperty(prop.Name);
+                        if (userProp != null)
+                        {
+                            prop.SetValue(instance, userProp.GetValue(value));
+                        }
+                    }
+
+                    return instance;
+                }
+                else if (
+                userType.IsCollection() &&
+                ProxyFactory.CollectionProxies.TryGetValue(userType.GetCollectionUnderType(), out var proxyCollection))
+                {
+                    var proxyUnderType = proxyCollection.ProxyCollectionType.GetCollectionUnderType();
+                    var listType = typeof(List<>).MakeGenericType(proxyUnderType);
+                    dynamic list = Activator.CreateInstance(listType);
+
+                    foreach (var v in value as IEnumerable)
+                    {
+                        list.Add(ConvertToProxy(v, userType.GetCollectionUnderType(), proxyUnderType));
+                    }
+
+                    return list;
+                }
             }
 
-            return null;
+            return value;
+        }
+
+        /// <summary>
+        /// Uses <see cref="AutoMapper.Mapper"/> to convert from proxy types to userTypes
+        /// </summary>
+        /// <typeparam name="T">The expected user type</typeparam>
+        /// <param name="value">The value to transform</param>
+        /// <param name="proxyType">The proxy type of the value</param>
+        /// <returns>The value transformed to the expected user type</returns>
+        private static T ConvertFromProxy<T>(object value, Type proxyType)
+        {
+            return (T)AutoMapper.Mapper.Map(value, proxyType, typeof(T));
         }
 
         /// <summary>
@@ -63,8 +112,8 @@ namespace ServForOracle.Internal
         private static bool TryGetCollectionUdtName(Type type, out string collectionUdTName)
         {
             collectionUdTName = ProxyFactory.CollectionProxies
-                        .Where(c => c.Key.IsAssignableFrom(type))
-                        .Select(c => c.Value)
+                        .Where(c => c.Key == type.GetCollectionUnderType())
+                        .Select(c => c.Value.UdtCollectionName)
                         .FirstOrDefault();
 
             return !string.IsNullOrWhiteSpace(collectionUdTName);
@@ -124,8 +173,6 @@ namespace ServForOracle.Internal
             }
 
             return CreateOracleParam(typeof(T), ConvertToProxy<T>(parameter.Value), paramDirection, parameter.OracleType);
-            //return CreateOracleParam(typeof(T), parameter.Value, paramDirection, parameter.OracleType);
-            //return CreateOracleParam(parameter.Type, parameter.Value, parameter.ParamDirection, parameter.OracleType);
         }
 
         /// <summary>
@@ -142,7 +189,7 @@ namespace ServForOracle.Internal
             OracleDbType? oracleType = null)
         {
 
-            if(type == null)
+            if (type == null)
                 throw new ArgumentNullException(nameof(type), "The type for the Oracle Parameter can not be null");
 
             object _value = value;
@@ -231,7 +278,7 @@ namespace ServForOracle.Internal
             param.Value = _value;
             return param;
         }
-        
+
         /// <summary>
         /// Extracts the oracle UDT type name from the <see cref="UDTNameAttribute"/>
         /// </summary>
@@ -303,7 +350,7 @@ namespace ServForOracle.Internal
             var type = oracleParam.Value.GetType();
 
             //This will handle Models.TypeModel and any other that don't require casting
-            if (type == retType)
+            if (ProxyFactory.Proxies.ContainsKey(type) || type == retType)
             {
                 //Check if property IsNull exists
                 var prop = type.GetProperty(nameof(TypeFactory.IsNull));
@@ -316,9 +363,8 @@ namespace ServForOracle.Internal
                     }
                 }
 
-                return (T)oracleParam.Value;
+                return ConvertFromProxy<T>(oracleParam.Value, type);
             }
-
             bool isNullable = (retType.IsGenericType && retType.GetGenericTypeDefinition() == typeof(Nullable<>));
 
             object value = default(T);
@@ -392,14 +438,14 @@ namespace ServForOracle.Internal
                     ExtractNullableValue(timestampTZ, isNullable);
                     break;
                 default:
-                    if (TryGetCollectionUdtName(retType, out var oracleType))
+                    if (ProxyFactory.CollectionProxies.TryGetValue(retType.GetCollectionUnderType(), out var proxyCollection))
                     {
                         var prop = type.GetProperty("Array");
-                        value = prop.GetValue(oracleParam.Value);
+                        value = ConvertFromProxy<T>(prop.GetValue(oracleParam.Value), proxyCollection.ProxyCollectionType);
                     }
                     else
                         throw new InvalidCastException($"Can't cast type {type.Name} to {retType.Name} " +
-                            $"for oracle type ${oracleType}");
+                            $"for oracle type ${proxyCollection.UdtCollectionName}");
                     break;
             }
 
