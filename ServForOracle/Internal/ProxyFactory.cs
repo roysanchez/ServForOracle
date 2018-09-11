@@ -33,10 +33,10 @@ namespace ServForOracle.Internal
         public static Dictionary<Type, (Type ProxyType, string UdtName)> Proxies { get; private set; }
         /// <summary>
         /// Read-Only dictionary with all the collections types for the OracleDB.
-        /// The Key is an IEnumerable of the generated proxy type.
-        /// The Value is the Oracle UDT Collection Name.
+        /// The Key is an Array of the generated proxy type.
+        /// The Value is the Orascle UDT Collection Name.
         /// </summary>
-        /// <value>[{<see cref="IEnumerable{Type}"/>, "HR.STRING_LIST"}, {<see cref="IEnumerable{Type}"/>, "HR.NUMBER_LIST"}]</value>
+        /// <value>[{<see cref="Type[]"/>, "HR.STRING_LIST"}, {<see cref="Type[]"/>, "HR.NUMBER_LIST"}]</value>
         public static Dictionary<Type, (Type ProxyCollectionType, string UdtCollectionName)> CollectionProxies { get; private set; }
         /// <summary>
         /// Used to check if the UDT type is registered
@@ -206,6 +206,7 @@ namespace ServForOracle.Internal
             }
 
             var generic = typeof(CollectionModel<>).MakeGenericType(new Type[] { underlyingProxyType });
+
             var proxyTypeDefinition = dynamicModule.DefineType(underlyingUserType.Name + "ListProxy", TypeAttributes.Public, generic);
 
             var attrCtorInfo = typeof(OracleCustomTypeMappingAttribute).GetConstructor(new Type[] { typeof(string) });
@@ -216,7 +217,7 @@ namespace ServForOracle.Internal
             AddNullProperty(proxyTypeDefinition, AddConstructor(proxyTypeDefinition));
             proxyTypeDefinition.CreateType();
 
-            var arrayProxy = typeof(IEnumerable<>).MakeGenericType(new Type[] { underlyingProxyType });
+            var arrayProxy = underlyingProxyType.MakeArrayType();
 
             CollectionProxies.Add(underlyingUserType, (arrayProxy, udtCollectionName));
 
@@ -289,9 +290,13 @@ namespace ServForOracle.Internal
 
             var propAttrCtorInfo = typeof(OracleObjectMappingAttribute).GetConstructor(new Type[] { typeof(string) });
 
+            var overridenProperties = userType.GetProperties(BindingFlags.Instance | BindingFlags.Public | 
+                                                               BindingFlags.Static | BindingFlags.DeclaredOnly);
+            
             foreach (var prop in userType.GetProperties())
             {
-                if (prop.Name == nameof(TypeFactory.Null))
+                //Skips the property if it is the Null property or if its been overriden by another one.
+                if (prop.Name == nameof(TypeFactory.Null) || overridenProperties.Any(c => c.Name == prop.Name && c != prop))
                 {
                     continue;
                 }

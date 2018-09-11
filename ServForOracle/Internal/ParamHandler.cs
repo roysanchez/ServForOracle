@@ -62,7 +62,7 @@ namespace ServForOracle.Internal
 
                     foreach (var prop in type.GetProperties())
                     {
-                        var userProp = userType.GetRuntimeProperty(prop.Name);
+                        var userProp = userType.GetProperty(prop.Name, prop.PropertyType);
                         if (userProp != null)
                         {
                             prop.SetValue(instance, userProp.GetValue(value));

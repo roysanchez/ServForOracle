@@ -2,7 +2,7 @@
   <PropertyGroup>
     <TargetFramework>net461</TargetFramework>
     <PackageId>ServForOracle</PackageId>
-    <Version>6.3.2</Version>
+    <Version>6.5.2</Version>
     <Title>ServForOracle - Oracle Package and Type wrapper for .NET</Title>
     <PlatformTarget>AnyCPU</PlatformTarget>
     <Authors>Roy Sánchez</Authors>
@@ -11,7 +11,9 @@
     <Copyright>Copyright 2018 (c) Roy Sanchez. All rights reserved.</Copyright>
     <Platforms>AnyCPU;x64</Platforms>
     <PackageReleaseNotes>
-      Fixed error with null property, it is now static as is expected by Oracle.DataAccess.
+      Changed the way the proxy creation work to take into account overriden properties.
+      Updated the proxies to use arrays instead of IEnumerable for collection properties in order to ease the standarization.
+      Note: It only supports arrays now.
     </PackageReleaseNotes>
     <RepositoryUrl>https://github.com/roysanchez/ServForOracle/</RepositoryUrl>
     <PackageProjectUrl>https://github.com/roysanchez/ServForOracle/</PackageProjectUrl>
