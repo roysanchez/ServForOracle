@@ -333,9 +333,8 @@ namespace ServForOracle
         /// <remarks>stackoverflow.com/questions/277817/compile-a-version-agnostic-dll-in-net</remarks>
         static ServiceForOracle()
         {
-            AutoMapper.Mapper.Initialize(c => c.CreateMissingTypeMaps = true);
             AppDomain.CurrentDomain.AssemblyResolve += Util.LoadOracleAssembly;
-            AppDomain.CurrentDomain.ProcessExit += Util.CloseOracleConnectionPool;    
+            AppDomain.CurrentDomain.ProcessExit += Util.CloseOracleConnectionPool;
         }
     }
 }

@@ -19,7 +19,12 @@ namespace ServForOracle.Internal
         /// <returns>If the type has the <see cref="IEnumerable"/> interface it means that the type is a collection</returns>
         public static bool IsCollection(this Type type)
         {
-            return type != typeof(string) && !type.IsValueType && type.GetInterface(nameof(IEnumerable)) != null;
+            return 
+                type.IsArray
+                ||
+                (type.IsInterface && type.IsGenericType && type.GetGenericTypeDefinition() == typeof(IEnumerable<>))
+                ||
+                (type != typeof(string) && !type.IsValueType && type.GetInterface(nameof(IEnumerable)) != null);
         }
 
         /// <summary>
@@ -51,7 +56,11 @@ namespace ServForOracle.Internal
             if (type == null || !IsCollection(type))
                 return null;
 
-            return type.GetElementType() ?? type.GetGenericArguments().Single();
+            var ga = type.GetGenericArguments();
+            if (ga.Length > 0)
+                return ga.Single();
+            else
+                return type.GetElementType();
         }
     }
 }

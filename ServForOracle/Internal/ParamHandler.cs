@@ -67,6 +67,12 @@ namespace ServForOracle.Internal
                         {
                             prop.SetValue(instance, userProp.GetValue(value));
                         }
+                        //checks if the property has a proxy
+                        else if (ProxyFactory.Proxies.ContainsKey(userProp.PropertyType) ||
+                                ProxyFactory.CollectionProxies.ContainsKey(userProp.PropertyType))
+                        {
+                            prop.SetValue(instance, ConvertToProxy(userProp.GetValue(value), userProp.PropertyType));
+                        }
                     }
 
                     return instance;
@@ -92,15 +98,101 @@ namespace ServForOracle.Internal
         }
 
         /// <summary>
-        /// Uses <see cref="AutoMapper.Mapper"/> to convert from proxy types to userTypes
+        /// Looks for the user type from a proxy
+        /// </summary>
+        /// <param name="proxyType">The proxy type to check for</param>
+        /// <returns>The user type for the proxy if it exists</returns>
+        public static Type GetUserTypeFromProxyType(Type proxyType)
+        {
+            if (proxyType.IsCollection())
+            {
+                return ProxyFactory.CollectionProxies
+                    .FirstOrDefault(c => c.Value.ProxyCollectionType == proxyType)
+                    .Key;
+            }
+            else
+            {
+                return ProxyFactory.Proxies.First(c => c.Value.ProxyType == proxyType).Key;
+            }
+        }
+
+        /// <summary>
+        /// Convert from <paramref name="proxyType"/> to <paramref name="userType"/>
+        /// </summary>
+        /// <param name="value">The value to transform</param>
+        /// <param name="proxyType">The proxy <see cref="Type"/> of the value</param>
+        /// <param name="userType">The user <see cref="Type"/> to convert to</param>
+        /// <returns>The value transformed to the <paramref name="userType"/></returns>
+        private static object ConvertFromProxy(object value, Type proxyType, Type userType)
+        {
+            if (value != null)
+            {
+                if (ProxyFactory.Proxies.TryGetValue(userType, out var proxy) && proxy.ProxyType == proxyType)
+                {
+                    var instance = Activator.CreateInstance(userType);
+
+                    //properties of the proxy
+                    foreach (var prop in proxyType.GetProperties())
+                    {
+                        //if its the same type don't do anything else
+                        var userProp = userType.GetProperty(prop.Name, prop.PropertyType);
+                        if (userProp != null)
+                        {
+                            prop.SetValue(instance, userProp.GetValue(value));
+                        }
+                        else
+                        {
+                            //checks if the property is a proxy, if yes then recursively converts the value.
+                            var proxyPropUserType = GetUserTypeFromProxyType(prop.PropertyType);
+                            if (proxyPropUserType != null)
+                            {
+                                var proxyProperty = userType.GetProperty(prop.Name, proxyPropUserType);
+                                if (proxyProperty != null)
+                                {
+                                    prop.SetValue(instance, ConvertFromProxy(userProp.GetValue(value), prop.PropertyType,
+                                         userProp.PropertyType));
+                                }
+                            }
+                        }
+                    }
+
+                    return instance;
+                }
+                else if (
+                    proxyType.IsCollection() &&
+                    userType.IsCollection() &&
+                    ProxyFactory.CollectionProxies.TryGetValue(userType.GetCollectionUnderType(), out var proxyCollection) &&
+                    proxyCollection.ProxyCollectionType == proxyType
+                )
+                {
+
+                    var proxyUnderType = proxyType.GetCollectionUnderType();
+                    var userUnderType = userType.GetCollectionUnderType();
+                    var listType = typeof(List<>).MakeGenericType(userUnderType);
+                    dynamic list = Activator.CreateInstance(listType);
+
+                    foreach (var v in value as IEnumerable)
+                    {
+                        list.Add(ConvertFromProxy(v, proxyUnderType, userUnderType));
+                    }
+
+                    return list.ToArray();
+                }
+            }
+
+            return value;
+        }
+
+        /// <summary>
+        /// Converts from proxy types to userTypes
         /// </summary>
         /// <typeparam name="T">The expected user type</typeparam>
         /// <param name="value">The value to transform</param>
         /// <param name="proxyType">The proxy type of the value</param>
-        /// <returns>The value transformed to the expected user type</returns>
+        /// <returns>The value transformed to the <typeparamref name="T"/></returns>
         private static T ConvertFromProxy<T>(object value, Type proxyType)
         {
-            return (T)AutoMapper.Mapper.Map(value, proxyType, typeof(T));
+            return (T)ConvertFromProxy(value, proxyType, typeof(T));//AutoMapper.Mapper.Map(value, proxyType, typeof(T));
         }
 
         /// <summary>

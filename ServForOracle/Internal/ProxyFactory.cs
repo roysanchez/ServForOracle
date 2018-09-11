@@ -176,24 +176,24 @@ namespace ServForOracle.Internal
         internal static Type GetOrCreateProxyCollectionType(Type underlyingUserType, string overrideUdtCollectioName = null)
         {
             var udtCollectionName = overrideUdtCollectioName ?? GetUdtCollectionNameFromAtribute(underlyingUserType);
+            
+            //Checks to see if the type already exists, and if the udtname is specified then that it is for that one.
+            var exists = CollectionProxies
+                .Where(c => c.Key == underlyingUserType &&
+                 ( string.IsNullOrWhiteSpace(udtCollectionName) || c.Value.UdtCollectionName == udtCollectionName))
+                .Select(c => c.Value.ProxyCollectionType);
+
+            if (exists.Count() == 1)
+            {
+                return exists.First();
+            }
 
             if (string.IsNullOrWhiteSpace(udtCollectionName))
             {
                 return null;
             }
 
-            //Checks to see if the type/udtname combination exists.
-            var exists = CollectionProxies
-                .Where(c => c.Key == underlyingUserType && c.Value.UdtCollectionName == udtCollectionName)
-                .Select(c => c.Value.ProxyCollectionType)
-                .FirstOrDefault();
-            
-            if (exists != null)
-            {
-                return exists;
-            }
-
-            if(!UDTLists.Add(udtCollectionName))
+            if (!UDTLists.Add(udtCollectionName))
             {
                 throw new ArgumentException(nameof(udtCollectionName), $"The UDT collection key '{udtCollectionName}' is registered.");
             }
@@ -214,11 +214,14 @@ namespace ServForOracle.Internal
 
             proxyTypeDefinition.SetCustomAttribute(attrBuilder);
 
-            AddNullProperty(proxyTypeDefinition, AddConstructor(proxyTypeDefinition));
+            var genericConstructor = TypeBuilder.GetConstructor(generic, typeof(CollectionModel<>).GetConstructor(Type.EmptyTypes));
+            var setMethod = typeof(CollectionModel<>).GetProperty(nameof(TypeFactory.IsNull)).GetSetMethod();
+            
+            AddNullProperty(proxyTypeDefinition, AddConstructor(proxyTypeDefinition, genericConstructor), setMethod);
             proxyTypeDefinition.CreateType();
-
-            var arrayProxy = underlyingProxyType.MakeArrayType();
-
+            
+            var arrayProxy = typeof(IEnumerable<>).MakeGenericType(new Type[] { underlyingProxyType });
+            
             CollectionProxies.Add(underlyingUserType, (arrayProxy, udtCollectionName));
 
             return arrayProxy;
@@ -336,15 +339,16 @@ namespace ServForOracle.Internal
         /// <see cref="CollectionModel{T}"/> or <see cref="TypeModel"/>
         /// </summary>
         /// <param name="proxyTypeDefinition">The type definition for the proxy that is going to be generated.</param>
+        /// <param name="constructor">The constructor to use as a subcall</param>
         /// <returns>The default constructor for the new type.</returns>
-        private static ConstructorBuilder AddConstructor(TypeBuilder proxyTypeDefinition)
+        private static ConstructorBuilder AddConstructor(TypeBuilder proxyTypeDefinition, ConstructorInfo constructor = null)
         {
-            var baseTypeCtor = proxyTypeDefinition.BaseType.GetConstructors()[0];
+            var objectCtor = constructor ?? proxyTypeDefinition.BaseType.GetConstructors()[0];
 
             var ctor = proxyTypeDefinition.DefineConstructor(MethodAttributes.Public, CallingConventions.Standard | CallingConventions.HasThis, Type.EmptyTypes);
             var gen = ctor.GetILGenerator();
             gen.Emit(OpCodes.Ldarg_0);
-            gen.Emit(OpCodes.Call, baseTypeCtor);
+            gen.Emit(OpCodes.Call, objectCtor);
             gen.Emit(OpCodes.Ret);
 
             return ctor;
@@ -356,14 +360,15 @@ namespace ServForOracle.Internal
         /// </summary>
         /// <param name="proxyTypeDefinition">The type definition for the proxy that is going to be generated.</param>
         /// <param name="constructor">The constructor to call in the Null Property</param>
+        /// <param name="setMethod">The set method for the IsNull property</param>
         /// <remarks>
         /// The Null property creates a new instance of the proxy type with the IsNull property set to true
         /// </remarks>
-        private static void AddNullProperty(TypeBuilder proxyTypeDefinition, ConstructorBuilder constructor)
+        private static void AddNullProperty(TypeBuilder proxyTypeDefinition, ConstructorBuilder constructor, MethodInfo setMethod = null)
         {
             var newProp = proxyTypeDefinition.DefineProperty(nameof(TypeFactory.Null), PropertyAttributes.None, proxyTypeDefinition, Type.EmptyTypes);
 
-            var fieldSetMethod = proxyTypeDefinition.BaseType.GetProperty(nameof(TypeFactory.IsNull)).GetSetMethod();
+            var fieldSetMethod = setMethod ?? proxyTypeDefinition.BaseType.GetProperty(nameof(TypeFactory.IsNull)).GetSetMethod();
             var methodAttributes = MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.Static | MethodAttributes.HideBySig;
             var getMethodBuilder = proxyTypeDefinition.DefineMethod("get_Null", methodAttributes, proxyTypeDefinition, Type.EmptyTypes);
 
