@@ -2,7 +2,7 @@
   <PropertyGroup>
     <TargetFramework>net461</TargetFramework>
     <PackageId>ServForOracle</PackageId>
-    <Version>7.0.2</Version>
+    <Version>7.1.0</Version>
     <Title>ServForOracle - Oracle Package and Type wrapper for .NET</Title>
     <PlatformTarget>AnyCPU</PlatformTarget>
     <Authors>Roy Sánchez</Authors>
@@ -11,9 +11,7 @@
     <Copyright>Copyright 2018 (c) Roy Sanchez. All rights reserved.</Copyright>
     <Platforms>AnyCPU;x64</Platforms>
     <PackageReleaseNotes>
-      Fixes the way that handles the Collection Proxies, they are now generated in a way as to not raise NotImplementedExceptions
-      as they are generic implementations.
-      Removed dependency of AutoMapper, the convertions are done manually because AutoMapper doesn't support generated types.
+      Added more overloads to the Proxy class, it is now possible to create a type and its list on one call.
     </PackageReleaseNotes>
     <RepositoryUrl>https://github.com/roysanchez/ServForOracle/</RepositoryUrl>
     <PackageProjectUrl>https://github.com/roysanchez/ServForOracle/</PackageProjectUrl>

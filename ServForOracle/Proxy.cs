@@ -14,6 +14,34 @@ namespace ServForOracle
     public static class Proxy
     {
         /// <summary>
+        /// Creates an object and a collection proxy for the <typeparamref name="T"/>
+        /// </summary>
+        /// <typeparam name="T">The user type to generate a proxy for</typeparam>
+        /// <param name="udtName">The name of the Oracle UDT</param>
+        /// <param name="udtCollectionName">The name of the Oracle UDT Collection</param>
+        /// <seealso cref="CreateListType{T}(string)"/>
+        /// <seealso cref="CreateType{T}(string)"/>
+        public static void CreateTypeAndList<T>(string udtName, string udtCollectionName)
+        {
+            CreateType<T>(udtName);
+            CreateListType<T>(udtName);
+        }
+
+        /// <summary>
+        /// Creates an object and a collection proxy for the <paramref name="type"/>
+        /// </summary>
+        /// <param name="type">The user type to generate a proxy for</param>
+        /// <param name="udtName">The name of the Oracle UDT</param>
+        /// <param name="udtCollectionName">The name of the Oracle UDT Collection</param>
+        /// <seealso cref="CreateListType{T}(string)"/>
+        /// <seealso cref="CreateType{T}(string)"/>
+        public static void CreateTypeAndList(Type type, string udtName, string udtCollectionName)
+        {
+            CreateType(type, udtName);
+            CreateListType(type, udtCollectionName);
+        }
+
+        /// <summary>
         /// Creates a collection proxy for the <typeparamref name="T"/>
         /// </summary>
         /// <typeparam name="T">The underlying type to use for the collection</typeparam>
@@ -80,11 +108,11 @@ namespace ServForOracle
         /// <exception cref="ArgumentException">If the <paramref name="udtName"/> has an invalid format</exception>
         public static void CreateType(Type type, string udtName)
         {
-            if(type == null)
+            if (type == null)
             {
                 throw new ArgumentNullException(nameof(type));
             }
-            else if(string.IsNullOrWhiteSpace(udtName))
+            else if (string.IsNullOrWhiteSpace(udtName))
             {
                 throw new ArgumentNullException(nameof(udtName));
             }
