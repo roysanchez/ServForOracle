@@ -359,7 +359,7 @@ namespace ServForOracle.Internal
             var newProp = proxyTypeDefinition.DefineProperty(nameof(TypeFactory.Null), PropertyAttributes.None, proxyTypeDefinition, Type.EmptyTypes);
 
             var fieldSetMethod = proxyTypeDefinition.BaseType.GetProperty(nameof(TypeFactory.IsNull)).GetSetMethod();
-            var methodAttributes = MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig;
+            var methodAttributes = MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.Static | MethodAttributes.HideBySig;
             var getMethodBuilder = proxyTypeDefinition.DefineMethod("get_Null", methodAttributes, proxyTypeDefinition, Type.EmptyTypes);
 
             var ilGenerator = getMethodBuilder.GetILGenerator();

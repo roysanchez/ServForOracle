@@ -2,7 +2,7 @@
   <PropertyGroup>
     <TargetFramework>net461</TargetFramework>
     <PackageId>ServForOracle</PackageId>
-    <Version>6.3.1</Version>
+    <Version>6.3.2</Version>
     <Title>ServForOracle - Oracle Package and Type wrapper for .NET</Title>
     <PlatformTarget>AnyCPU</PlatformTarget>
     <Authors>Roy Sánchez</Authors>
@@ -11,7 +11,7 @@
     <Copyright>Copyright 2018 (c) Roy Sanchez. All rights reserved.</Copyright>
     <Platforms>AnyCPU;x64</Platforms>
     <PackageReleaseNotes>
-      Added initial implementation of the proxy transform, uses parts of automapper to go from proxy to userType.
+      Fixed error with null property, it is now static as is expected by Oracle.DataAccess.
     </PackageReleaseNotes>
     <RepositoryUrl>https://github.com/roysanchez/ServForOracle/</RepositoryUrl>
     <PackageProjectUrl>https://github.com/roysanchez/ServForOracle/</PackageProjectUrl>
