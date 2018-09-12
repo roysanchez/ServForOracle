@@ -62,16 +62,24 @@ namespace ServForOracle.Internal
 
                     foreach (var prop in type.GetProperties())
                     {
+                        if(prop.Name == nameof(TypeFactory.Null))
+                        {
+                            continue;
+                        }
+
                         var userProp = userType.GetProperty(prop.Name, prop.PropertyType);
                         if (userProp != null)
                         {
-                            prop.SetValue(instance, userProp.GetValue(value));
-                        }
-                        //checks if the property has a proxy
-                        else if (ProxyFactory.Proxies.ContainsKey(userProp.PropertyType) ||
+                            //checks if the property has a proxy
+                            if (ProxyFactory.Proxies.ContainsKey(userProp.PropertyType) ||
                                 ProxyFactory.CollectionProxies.ContainsKey(userProp.PropertyType))
-                        {
-                            prop.SetValue(instance, ConvertToProxy(userProp.GetValue(value), userProp.PropertyType));
+                            {
+                                prop.SetValue(instance, ConvertToProxy(userProp.GetValue(value), userProp.PropertyType));
+                            }
+                            else
+                            {
+                                prop.SetValue(instance, userProp.GetValue(value));
+                            }
                         }
                     }
 
