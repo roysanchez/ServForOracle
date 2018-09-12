@@ -24,7 +24,7 @@ namespace ServForOracle
         public static void CreateTypeAndList<T>(string udtName, string udtCollectionName)
         {
             CreateType<T>(udtName);
-            CreateListType<T>(udtName);
+            CreateListType<T>(udtCollectionName);
         }
 
         /// <summary>
