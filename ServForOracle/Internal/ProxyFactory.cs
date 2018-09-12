@@ -3,6 +3,7 @@ using ServForOracle.Models;
 using ServForOracle.Tools;
 using System;
 using System.Collections;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -30,14 +31,17 @@ namespace ServForOracle.Internal
         /// The Value is a tuple, with the generated proxy type and the Oracle UDT description.
         /// </summary>
         /// <value>[{<see cref="Type"/> BaseType, (<see cref="Type"/> ProxyType, "HR.CLIENT_OBJ")}]</value>
-        public static Dictionary<Type, (Type ProxyType, string UdtName)> Proxies { get; private set; }
+        public static ConcurrentDictionary<Type, (Type ProxyType, string UdtName)> Proxies { get; private set; }
+
+
+        private static ConcurrentDictionary<Type, Type> ProxiesInWork;
         /// <summary>
         /// Read-Only dictionary with all the collections types for the OracleDB.
         /// The Key is an Array of the generated proxy type.
         /// The Value is the Orascle UDT Collection Name.
         /// </summary>
         /// <value>[{<see cref="Type[]"/>, "HR.STRING_LIST"}, {<see cref="Type[]"/>, "HR.NUMBER_LIST"}]</value>
-        public static Dictionary<Type, (Type ProxyCollectionType, string UdtCollectionName)> CollectionProxies { get; private set; }
+        public static ConcurrentDictionary<Type, (Type ProxyCollectionType, string UdtCollectionName)> CollectionProxies { get; private set; }
         /// <summary>
         /// Used to check if the UDT type is registered
         /// </summary>
@@ -50,8 +54,10 @@ namespace ServForOracle.Internal
         /// </summary>
         static ProxyFactory()
         {
-            Proxies = new Dictionary<Type, (Type proxyType, string udtName)>();
-            CollectionProxies = new Dictionary<Type, (Type ProxyCollectionType, string UdtCollectionName)>();
+            Proxies = new ConcurrentDictionary<Type, (Type ProxyType, string UdtName)>();
+            ProxiesInWork = new ConcurrentDictionary<Type, Type>();
+            CollectionProxies = new ConcurrentDictionary<Type, (Type ProxyCollectionType, string UdtCollectionName)>();
+            
             UDTLists = new HashSet<string>();
             
             var executing = Assembly.GetExecutingAssembly();
@@ -214,7 +220,12 @@ namespace ServForOracle.Internal
 
             proxyTypeDefinition.SetCustomAttribute(attrBuilder);
 
-            var genericConstructor = TypeBuilder.GetConstructor(generic, typeof(CollectionModel<>).GetConstructor(Type.EmptyTypes));
+            ConstructorInfo genericConstructor = null;
+            if (generic is TypeBuilder)
+                genericConstructor = TypeBuilder.GetConstructor(generic, typeof(CollectionModel<>).GetConstructor(Type.EmptyTypes));
+            else
+                genericConstructor = generic.GetConstructor(Type.EmptyTypes);
+
             var setMethod = typeof(CollectionModel<>).GetProperty(nameof(TypeFactory.IsNull)).GetSetMethod();
             
             AddNullProperty(proxyTypeDefinition, AddConstructor(proxyTypeDefinition, genericConstructor), setMethod);
@@ -222,7 +233,7 @@ namespace ServForOracle.Internal
             
             var arrayProxy = typeof(IEnumerable<>).MakeGenericType(new Type[] { underlyingProxyType });
             
-            CollectionProxies.Add(underlyingUserType, (arrayProxy, udtCollectionName));
+            CollectionProxies.GetOrAdd(underlyingUserType, (arrayProxy, udtCollectionName));
 
             return arrayProxy;
         }
@@ -268,6 +279,8 @@ namespace ServForOracle.Internal
                 return userType;
             else if (Proxies.TryGetValue(userType, out var _exists))
                 return _exists.ProxyType;
+            else if (ProxiesInWork.TryGetValue(userType, out var workingProxyType))
+                return workingProxyType;
 
             var udtName = overrideUdtName ?? GetUdtNameFromAttribute(userType);
             
@@ -284,7 +297,7 @@ namespace ServForOracle.Internal
 
             var proxyTypeDefinition = dynamicModule.DefineType(userType.Name + "Proxy", TypeAttributes.Public, typeof(TypeModel));
 
-            Proxies.Add(userType, (proxyTypeDefinition, udtName));
+            ProxiesInWork.GetOrAdd(userType, proxyTypeDefinition);
 
             var attrCtorInfo = typeof(OracleCustomTypeMappingAttribute).GetConstructor(new Type[] { typeof(string) });
             var attrBuilder = new CustomAttributeBuilder(attrCtorInfo, new object[] { udtName });
@@ -330,6 +343,9 @@ namespace ServForOracle.Internal
 
             AddNullProperty(proxyTypeDefinition, AddConstructor(proxyTypeDefinition));
             var proxyType = proxyTypeDefinition.CreateType();
+            
+            Proxies.GetOrAdd(userType, (proxyType, udtName));
+            ProxiesInWork.TryRemove(userType, out _);
 
             return proxyType;
         }
