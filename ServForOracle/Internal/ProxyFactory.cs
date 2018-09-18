@@ -188,7 +188,7 @@ namespace ServForOracle.Internal
         /// <param name="proxyType">The proxy <see cref="Type"/> of the value</param>
         /// <param name="userType">The user <see cref="Type"/> to convert to</param>
         /// <returns>The value transformed to the <paramref name="userType"/></returns>
-        internal static object ConvertFromProxy(object value, Type proxyType, Type userType)
+        internal static dynamic ConvertFromProxy(object value, Type proxyType, Type userType)
         {
             if (value != null)
             {
@@ -238,7 +238,7 @@ namespace ServForOracle.Internal
                     var userUnderType = userType.GetCollectionUnderType();
                     var listType = typeof(List<>).MakeGenericType(userUnderType);
                     dynamic list = Activator.CreateInstance(listType);
-
+                    
                     foreach (var v in value as IEnumerable)
                     {
                         list.Add(ConvertFromProxy(v, proxyUnderType, userUnderType));

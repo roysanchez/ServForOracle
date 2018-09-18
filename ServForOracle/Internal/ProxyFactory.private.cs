@@ -240,7 +240,7 @@ namespace ServForOracle.Internal
             ilGenerator.Emit(OpCodes.Ret);
 
 
-            var setMethodBuilder = proxyTypeDefinition.DefineMethod("set_" + name, methodAttributes, null, new Type[] { typeof(string) });
+            var setMethodBuilder = proxyTypeDefinition.DefineMethod("set_" + name, methodAttributes, null, new Type[] { propertyType });
             ilGenerator = setMethodBuilder.GetILGenerator();
             ilGenerator.Emit(OpCodes.Ldarg_0);
             ilGenerator.Emit(OpCodes.Ldarg_1);
