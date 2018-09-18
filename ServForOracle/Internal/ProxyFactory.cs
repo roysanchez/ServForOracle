@@ -1,10 +1,10 @@
 ﻿using Oracle.DataAccess.Types;
 using ServForOracle.Models;
-using ServForOracle.Tools;
 using System;
 using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
@@ -13,80 +13,8 @@ using System.Threading.Tasks;
 
 namespace ServForOracle.Internal
 {
-    /// <summary>
-    /// The class that handles all the creating and management of the proxies generated to map to the Oracle UDT standard set
-    /// by the ODP.NET Native library.
-    /// </summary>
-    internal static class ProxyFactory
+    internal static partial class ProxyFactory
     {
-        internal const string NAME = "servForOracleProxies";
-
-        private static AssemblyName ProxiesAssemblyName = new AssemblyName(NAME);
-        private static AssemblyBuilder dynamicAssembly = AppDomain.CurrentDomain.DefineDynamicAssembly(ProxiesAssemblyName, AssemblyBuilderAccess.Run);
-        private static ModuleBuilder dynamicModule = dynamicAssembly.DefineDynamicModule(ProxiesAssemblyName.Name);
-
-        /// <summary>
-        /// Read-Only dictionary with all the object types for the OracleDB.
-        /// The Key is the Type with the UDTNameAttribute.
-        /// The Value is a tuple, with the generated proxy type and the Oracle UDT description.
-        /// </summary>
-        /// <value>[{<see cref="Type"/> BaseType, (<see cref="Type"/> ProxyType, "HR.CLIENT_OBJ")}]</value>
-        public static ConcurrentDictionary<Type, (Type ProxyType, string UdtName)> Proxies { get; private set; }
-
-
-        private static ConcurrentDictionary<Type, Type> ProxiesInWork;
-        /// <summary>
-        /// Read-Only dictionary with all the collections types for the OracleDB.
-        /// The Key is an Array of the generated proxy type.
-        /// The Value is the Orascle UDT Collection Name.
-        /// </summary>
-        /// <value>[{<see cref="Type[]"/>, "HR.STRING_LIST"}, {<see cref="Type[]"/>, "HR.NUMBER_LIST"}]</value>
-        public static ConcurrentDictionary<Type, (Type ProxyCollectionType, string UdtCollectionName)> CollectionProxies { get; private set; }
-        /// <summary>
-        /// Used to check if the UDT type is registered
-        /// </summary>
-        private static HashSet<string> UDTLists;
-
-        /// <summary>
-        /// Looks for all the assemblies in the current AppDomain that aren't either Microsofts, Oracles or System.
-        /// In those assemblies then selects all the instantiable classes that have the
-        /// <see cref="ServForOracle.UDTCollectionNameAttribute"/> and/or <see cref="ServForOracle.UDTNameAttribute"/>
-        /// </summary>
-        static ProxyFactory()
-        {
-            Proxies = new ConcurrentDictionary<Type, (Type ProxyType, string UdtName)>();
-            ProxiesInWork = new ConcurrentDictionary<Type, Type>();
-            CollectionProxies = new ConcurrentDictionary<Type, (Type ProxyCollectionType, string UdtCollectionName)>();
-            
-            UDTLists = new HashSet<string>();
-            
-            var executing = Assembly.GetExecutingAssembly();
-
-            var assemblies =
-                    from assembly in AppDomain.CurrentDomain.GetAssemblies()
-                    where assembly != executing
-                       && !assembly.GlobalAssemblyCache
-                       //&& assembly.Location == executing.Location
-                       && !assembly.FullName.StartsWith("Microsoft")
-                       && !assembly.FullName.StartsWith("System")
-                       && !assembly.FullName.StartsWith("Oracle")
-                       && !assembly.FullName.StartsWith("xunit")
-                    select assembly;
-
-            var types = assemblies.SelectMany(a => a.GetTypes())
-                        .Where(t => t.IsClass && !t.IsSealed && !t.IsAbstract);
-
-            foreach (var type in types.Where(t => t.GetCustomAttribute<UDTCollectionNameAttribute>() != null))
-            {
-                GetOrCreateProxyCollectionType(type);
-            }
-
-            foreach (var type in types.Where(t => t.GetCustomAttribute<UDTNameAttribute>() != null))
-            {
-                GetOrCreateProxyType(type);
-            }
-        }
-
         /// <summary>
         /// The Generated <see cref="Assembly"/> assembly
         /// </summary>
@@ -95,58 +23,232 @@ namespace ServForOracle.Internal
                                                                     .FirstOrDefault();
 
         /// <summary>
-        /// Gets the UDT Name from the <see cref="UDTNameAttribute"/>
+        /// Read-Only dictionary with all the object types for the OracleDB.
+        /// The Key is the Type with the UDTNameAttribute.
+        /// The Value is a tuple, with the generated proxy type and the Oracle UDT description.
         /// </summary>
-        /// <param name="type">The <see cref="Type"/> with the <see cref="UDTNameAttribute>"/></param>
-        /// <returns>the name on the <see cref="UDTNameAttribute"/></returns>
-        /// <remarks>If the <paramref name="type"/> doesn't have the <see cref="UDTNameAttribute"/> returns null</remarks>
-        /// <seealso cref="GetUdtCollectionNameFromAtribute(Type)"/>
-        /// <see cref="GetUdtPropertyNameFromAttribute(PropertyInfo)"/>
-        private static string GetUdtNameFromAttribute(Type type)
-        {
-            if (type == null)
-                return null;
+        /// <value>[{<see cref="Type"/> BaseType, (<see cref="Type"/> ProxyType, "HR.CLIENT_OBJ")}]</value>
+        internal static ConcurrentDictionary<Type, (Type ProxyType, string UdtName)> Proxies { get; private set; }
+        /// <summary>
+        /// Read-Only dictionary with all the collections types for the OracleDB.
+        /// The Key is an Array of the generated proxy type.
+        /// The Value is the Orascle UDT Collection Name.
+        /// </summary>
+        /// <value>[{<see cref="Type[]"/>, "HR.STRING_LIST"}, {<see cref="Type[]"/>, "HR.NUMBER_LIST"}]</value>
+        internal static ConcurrentDictionary<Type, (Type ProxyCollectionType, string UdtCollectionName)> CollectionProxies { get; private set; }
 
-            return type.GetCustomAttribute<UDTNameAttribute>()?.Name;
+        /// <summary>
+        /// Used to check if the UDT type is registered
+        /// </summary>
+        private static HashSet<string> UDTLists;
+        
+        /// <summary>
+        /// Maps an existing proxy to another user type
+        /// </summary>
+        /// <param name="userType">The user <see cref="Type"/> to map</param>
+        /// <param name="udtName">The name of the udt that was already mapped</param>
+        /// <remarks>
+        /// The <paramref name="udtName"/> has to be registered either through the <see cref="UDTNameAttribute"/>
+        /// or using the method <see cref="GetOrCreateProxyType(Type, string)"/>
+        /// </remarks>
+        /// <seealso cref="AddCollectionTypeToExistingProxyType(Type, string)"/>
+        internal static void AddTypeToExistingProxyType(Type userType, string udtName)
+        {
+            if (string.IsNullOrWhiteSpace(udtName))
+                throw new ArgumentNullException(nameof(udtName));
+            if (userType == null)
+                throw new ArgumentNullException(nameof(userType));
+            if (!UDTLists.Any(c => c == udtName))
+                throw new ArgumentException("The udtName has to be registered", nameof(udtName));
+
+            var proxy = GetProxyTypeFromUdtName(udtName);
+
+            if(proxy != default)
+            {
+                Proxies.TryAdd(userType, proxy);
+            }
         }
 
         /// <summary>
-        /// Gets the UDT Collection Name from the <see cref="UDTCollectionNameAttribute"/>
+        /// Maps an existing collection proxy to another user type
         /// </summary>
-        /// <param name="type">The <see cref="Type"/> with the <see cref="UDTCollectionNameAttribute"/></param>
-        /// <returns>The name on the <see cref="UDTCollectionNameAttribute"/></returns>
-        /// <remarks>If the <paramref name="type"/> doesn't have the <see cref="UDTCollectionNameAttribute"/> returns null</remarks>
-        /// <seealso cref="GetUdtNameFromAttribute(Type)"/>
-        /// <see cref="GetUdtPropertyNameFromAttribute(PropertyInfo)"/>
-        private static string GetUdtCollectionNameFromAtribute(Type type)
+        /// <param name="userType">The user <see cref="Type"/> to map</param>
+        /// <param name="udtCollectionName">The name of the udt collection that was already mapped</param>
+        /// <remarks>
+        /// The <paramref name="udtCollectionName"/> has to be registered either through the <see cref="UDTCollectionNameAttribute"/>
+        /// or using the method <see cref="GetOrCreateProxyCollectionType(Type, string)(Type, string)"/>
+        /// </remarks>
+        /// <seealso cref="AddTypeToExistingProxyType(Type, string)"/>
+        internal static void AddCollectionTypeToExistingProxyType(Type userType, string udtCollectionName)
         {
-            if (type == null)
-                return null;
+            if (string.IsNullOrWhiteSpace(udtCollectionName))
+                throw new ArgumentNullException(nameof(udtCollectionName));
+            if (userType == null)
+                throw new ArgumentNullException(nameof(userType));
+            if (!UDTLists.Any(c => c == udtCollectionName))
+                throw new ArgumentException("The udtName has to be registered", nameof(udtCollectionName));
 
-            return type.GetCustomAttribute<UDTCollectionNameAttribute>()?.Name;
+            var proxy = GetCollectionProxyTypeFromUdtName(udtCollectionName);
+
+            if (proxy != default)
+            {
+                CollectionProxies.TryAdd(userType, proxy);
+            }
         }
 
         /// <summary>
-        /// Gets the UDT Name from the <see cref="UDTPropertyAttribute"/>
+        /// Automapper can't convert to generated types, in the meanwhile this will do
         /// </summary>
-        /// <param name="property">The property with the <see cref="UDTPropertyAttribute"/></param>
-        /// <returns>The name on the <see cref="UDTPropertyAttribute"/> or the name of the property</returns>
-        /// <seealso cref="GetUdtNameFromAttribute(Type)"/>
-        /// <seealso cref="GetUdtCollectionNameFromAtribute(Type)"/>
-        private static string GetUdtPropertyNameFromAttribute(PropertyInfo property)
+        /// <param name="value">The value to try an convert</param>
+        /// <param name="userType">The type of the <paramref name="value"/></param>
+        /// <returns>If its a proxy then returns the converted type otherwise is left as is</returns>
+        /// <seealso cref="ConvertToProxy(object, Type)"/>
+        internal static object ConvertToProxy<T>(T value)
         {
-            if (property == null)
-                return null;
+            return ConvertToProxy(value, typeof(T));
+        }
 
-            var attr = property.GetCustomAttribute<UDTPropertyAttribute>();
-            if (attr != null)
+        /// <summary>
+        /// Automapper can't convert to generated types, in the meanwhile this will do
+        /// </summary>
+        /// <param name="value">The value to try an convert</param>
+        /// <param name="userType">The type of the <paramref name="value"/></param>
+        /// <returns>If its a proxy then returns the converted type otherwise is left as is</returns>
+        /// <seealso cref="ConvertToProxy{T}(T)"/>
+        internal static object ConvertToProxy(object value, Type userType, Type proxyType = null)
+        {
+            if (value != null)
             {
-                return attr.Name;
+                (Type ProxyType, string) proxy = (null, null);
+                if (proxyType != null || Proxies.TryGetValue(userType, out proxy))
+                {
+                    var type = proxyType ?? proxy.ProxyType;
+                    var instance = Activator.CreateInstance(type);
+
+                    foreach (var prop in type.GetProperties())
+                    {
+                        if (prop.Name == nameof(TypeFactory.Null))
+                        {
+                            continue;
+                        }
+
+                        var userProp = userType.GetProperty(prop.Name, prop.PropertyType);
+                        if (userProp != null)
+                        {
+                            //checks if the property has a proxy
+                            if (Proxies.ContainsKey(userProp.PropertyType) || CollectionProxies.ContainsKey(userProp.PropertyType))
+                            {
+                                prop.SetValue(instance, ConvertToProxy(userProp.GetValue(value), userProp.PropertyType));
+                            }
+                            else
+                            {
+                                prop.SetValue(instance, userProp.GetValue(value));
+                            }
+                        }
+                    }
+
+                    return instance;
+                }
+                else if (
+                userType.IsCollection() &&
+                ProxyFactory.CollectionProxies.TryGetValue(userType.GetCollectionUnderType(), out var proxyCollection))
+                {
+                    var proxyUnderType = proxyCollection.ProxyCollectionType.GetCollectionUnderType();
+                    var listType = typeof(List<>).MakeGenericType(proxyUnderType);
+                    dynamic list = Activator.CreateInstance(listType);
+
+                    foreach (var v in value as IEnumerable)
+                    {
+                        list.Add(ConvertToProxy(v, userType.GetCollectionUnderType(), proxyUnderType));
+                    }
+
+                    return list;
+                }
             }
-            else
+
+            return value;
+        }
+
+        /// <summary>
+        /// Converts from proxy types to userTypes
+        /// </summary>
+        /// <typeparam name="T">The expected user type</typeparam>
+        /// <param name="value">The value to transform</param>
+        /// <param name="proxyType">The proxy type of the value</param>
+        /// <returns>The value transformed to the <typeparamref name="T"/></returns>
+        internal static T ConvertFromProxy<T>(object value, Type proxyType)
+        {
+            return (T)ConvertFromProxy(value, proxyType, typeof(T));
+        }
+
+        /// <summary>
+        /// Convert from <paramref name="proxyType"/> to <paramref name="userType"/>
+        /// </summary>
+        /// <param name="value">The value to transform</param>
+        /// <param name="proxyType">The proxy <see cref="Type"/> of the value</param>
+        /// <param name="userType">The user <see cref="Type"/> to convert to</param>
+        /// <returns>The value transformed to the <paramref name="userType"/></returns>
+        internal static object ConvertFromProxy(object value, Type proxyType, Type userType)
+        {
+            if (value != null)
             {
-                return property.Name.ToUpper();
+                if (Proxies.TryGetValue(userType, out var proxy) && proxy.ProxyType == proxyType)
+                {
+                    var instance = Activator.CreateInstance(userType);
+
+                    //properties of the proxy
+                    foreach (var prop in proxyType.GetProperties())
+                    {
+                        if (prop.Name == nameof(TypeFactory.Null) || prop.Name == nameof(TypeFactory.IsNull))
+                            continue;
+
+                        //if its the same type don't do anything else
+                        var userProp = userType.GetProperty(prop.Name, prop.PropertyType);
+                        if (userProp != null)
+                        {
+                            userProp.SetValue(instance, prop.GetValue(value));
+                        }
+                        else
+                        {
+                            //checks if the property is a proxy, if yes then recursively converts the value.
+                            var proxyPropUserType = GetUserTypeFromProxyType(prop.PropertyType);
+                            if (proxyPropUserType != null)
+                            {
+                                var proxyProperty = userType.GetProperty(prop.Name, proxyPropUserType);
+                                if (proxyProperty != null)
+                                {
+                                    userProp.SetValue(instance, ConvertFromProxy(prop.GetValue(value), prop.PropertyType,
+                                         userProp.PropertyType));
+                                }
+                            }
+                        }
+                    }
+
+                    return instance;
+                }
+                else if (
+                    proxyType.IsCollection() &&
+                    userType.IsCollection() &&
+                    CollectionProxies.TryGetValue(userType.GetCollectionUnderType(), out var proxyCollection) &&
+                    proxyCollection.ProxyCollectionType == proxyType
+                )
+                {
+
+                    var proxyUnderType = proxyType.GetCollectionUnderType();
+                    var userUnderType = userType.GetCollectionUnderType();
+                    var listType = typeof(List<>).MakeGenericType(userUnderType);
+                    dynamic list = Activator.CreateInstance(listType);
+
+                    foreach (var v in value as IEnumerable)
+                    {
+                        list.Add(ConvertFromProxy(v, proxyUnderType, userUnderType));
+                    }
+
+                    return list.ToArray();
+                }
             }
+
+            return value;
         }
 
         /// <summary>
@@ -182,11 +284,11 @@ namespace ServForOracle.Internal
         internal static Type GetOrCreateProxyCollectionType(Type underlyingUserType, string overrideUdtCollectioName = null)
         {
             var udtCollectionName = overrideUdtCollectioName ?? GetUdtCollectionNameFromAtribute(underlyingUserType);
-            
+
             //Checks to see if the type already exists, and if the udtname is specified then that it is for that one.
             var exists = CollectionProxies
                 .Where(c => c.Key == underlyingUserType &&
-                 ( string.IsNullOrWhiteSpace(udtCollectionName) || c.Value.UdtCollectionName == udtCollectionName))
+                 (string.IsNullOrWhiteSpace(udtCollectionName) || c.Value.UdtCollectionName == udtCollectionName))
                 .Select(c => c.Value.ProxyCollectionType);
 
             if (exists.Count() == 1)
@@ -227,12 +329,12 @@ namespace ServForOracle.Internal
                 genericConstructor = generic.GetConstructor(Type.EmptyTypes);
 
             var setMethod = typeof(CollectionModel<>).GetProperty(nameof(TypeFactory.IsNull)).GetSetMethod();
-            
+
             AddNullProperty(proxyTypeDefinition, AddConstructor(proxyTypeDefinition, genericConstructor), setMethod);
             proxyTypeDefinition.CreateType();
-            
+
             var arrayProxy = typeof(IEnumerable<>).MakeGenericType(new Type[] { underlyingProxyType });
-            
+
             CollectionProxies.GetOrAdd(underlyingUserType, (arrayProxy, udtCollectionName));
 
             return arrayProxy;
@@ -279,11 +381,11 @@ namespace ServForOracle.Internal
                 return userType;
             else if (Proxies.TryGetValue(userType, out var _exists))
                 return _exists.ProxyType;
-            else if (ProxiesInWork.TryGetValue(userType, out var workingProxyType))
+            else if (ProxiesBeingWorked.TryGetValue(userType, out var workingProxyType))
                 return workingProxyType;
 
             var udtName = overrideUdtName ?? GetUdtNameFromAttribute(userType);
-            
+
             if (string.IsNullOrWhiteSpace(udtName))
             {
                 throw new ArgumentNullException(nameof(udtName), "In order to create a proxy for a class you must use the UDTName attribute" +
@@ -297,7 +399,7 @@ namespace ServForOracle.Internal
 
             var proxyTypeDefinition = dynamicModule.DefineType(userType.Name + "Proxy", TypeAttributes.Public, typeof(TypeModel));
 
-            ProxiesInWork.GetOrAdd(userType, proxyTypeDefinition);
+            ProxiesBeingWorked.GetOrAdd(userType, proxyTypeDefinition);
 
             var attrCtorInfo = typeof(OracleCustomTypeMappingAttribute).GetConstructor(new Type[] { typeof(string) });
             var attrBuilder = new CustomAttributeBuilder(attrCtorInfo, new object[] { udtName });
@@ -306,9 +408,9 @@ namespace ServForOracle.Internal
 
             var propAttrCtorInfo = typeof(OracleObjectMappingAttribute).GetConstructor(new Type[] { typeof(string) });
 
-            var overridenProperties = userType.GetProperties(BindingFlags.Instance | BindingFlags.Public | 
+            var overridenProperties = userType.GetProperties(BindingFlags.Instance | BindingFlags.Public |
                                                                BindingFlags.Static | BindingFlags.DeclaredOnly);
-            
+
             foreach (var prop in userType.GetProperties())
             {
                 //Skips the property if it is the Null property or if its been overriden by another one.
@@ -327,7 +429,7 @@ namespace ServForOracle.Internal
                 else if (propType.IsCollection())
                 {
                     var collectionType = GetOrCreateProxyCollectionType(propType.GetCollectionUnderType());
-                    if(collectionType == null)
+                    if (collectionType == null)
                     {
                         throw new ArgumentException($"The collection property {prop.Name}:{propType.Name} for the type {userType.Name}, must "
                             + $"have the {nameof(UDTCollectionNameAttribute)} set in the {propType.GetCollectionUnderType()} class with the "
@@ -343,94 +445,11 @@ namespace ServForOracle.Internal
 
             AddNullProperty(proxyTypeDefinition, AddConstructor(proxyTypeDefinition));
             var proxyType = proxyTypeDefinition.CreateType();
-            
+
             Proxies.GetOrAdd(userType, (proxyType, udtName));
-            ProxiesInWork.TryRemove(userType, out _);
+            ProxiesBeingWorked.TryRemove(userType, out _);
 
             return proxyType;
-        }
-
-        /// <summary>
-        /// Creates a constructor based on the parent class of the type that is expected to be either
-        /// <see cref="CollectionModel{T}"/> or <see cref="TypeModel"/>
-        /// </summary>
-        /// <param name="proxyTypeDefinition">The type definition for the proxy that is going to be generated.</param>
-        /// <param name="constructor">The constructor to use as a subcall</param>
-        /// <returns>The default constructor for the new type.</returns>
-        private static ConstructorBuilder AddConstructor(TypeBuilder proxyTypeDefinition, ConstructorInfo constructor = null)
-        {
-            var objectCtor = constructor ?? proxyTypeDefinition.BaseType.GetConstructors()[0];
-
-            var ctor = proxyTypeDefinition.DefineConstructor(MethodAttributes.Public, CallingConventions.Standard | CallingConventions.HasThis, Type.EmptyTypes);
-            var gen = ctor.GetILGenerator();
-            gen.Emit(OpCodes.Ldarg_0);
-            gen.Emit(OpCodes.Call, objectCtor);
-            gen.Emit(OpCodes.Ret);
-
-            return ctor;
-        }
-
-        /// <summary>
-        /// Adds a Null static property to the type definition for the new proxy, it is a requirement for the
-        /// connection of Oracles UDTs with .NET POCOs
-        /// </summary>
-        /// <param name="proxyTypeDefinition">The type definition for the proxy that is going to be generated.</param>
-        /// <param name="constructor">The constructor to call in the Null Property</param>
-        /// <param name="setMethod">The set method for the IsNull property</param>
-        /// <remarks>
-        /// The Null property creates a new instance of the proxy type with the IsNull property set to true
-        /// </remarks>
-        private static void AddNullProperty(TypeBuilder proxyTypeDefinition, ConstructorBuilder constructor, MethodInfo setMethod = null)
-        {
-            var newProp = proxyTypeDefinition.DefineProperty(nameof(TypeFactory.Null), PropertyAttributes.None, proxyTypeDefinition, Type.EmptyTypes);
-
-            var fieldSetMethod = setMethod ?? proxyTypeDefinition.BaseType.GetProperty(nameof(TypeFactory.IsNull)).GetSetMethod();
-            var methodAttributes = MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.Static | MethodAttributes.HideBySig;
-            var getMethodBuilder = proxyTypeDefinition.DefineMethod("get_Null", methodAttributes, proxyTypeDefinition, Type.EmptyTypes);
-
-            var ilGenerator = getMethodBuilder.GetILGenerator();
-            ilGenerator.Emit(OpCodes.Nop);
-            ilGenerator.Emit(OpCodes.Newobj, constructor);
-            ilGenerator.Emit(OpCodes.Dup);
-            ilGenerator.Emit(OpCodes.Ldc_I4_1);
-            ilGenerator.Emit(OpCodes.Callvirt, fieldSetMethod);
-            ilGenerator.Emit(OpCodes.Ret);
-
-            newProp.SetGetMethod(getMethodBuilder);
-        }
-
-        /// <summary>
-        /// Adds a new property to the proxy type definition, with the <see cref="OracleObjectMappingAttribute"/> set
-        /// to the <paramref name="udtPropName"/> specified
-        /// </summary>
-        /// <param name="proxyTypeDefinition">The proxy type definition to add the property to</param>
-        /// <param name="name">The name of the new property</param>
-        /// <param name="udtPropName">The Oracle UDT property name.</param>
-        /// <param name="propertyType">The type returned by the property</param>
-        /// <param name="propAttrCtorInfo">The <see cref="OracleObjectMappingAttribute"/> constructor</param>
-        private static void AddProperty(TypeBuilder proxyTypeDefinition, string name, string udtPropName, Type propertyType, ConstructorInfo propAttrCtorInfo)
-        {
-            var newProp = proxyTypeDefinition.DefineProperty(name, PropertyAttributes.None, propertyType, Type.EmptyTypes);
-            newProp.SetCustomAttribute(new CustomAttributeBuilder(propAttrCtorInfo, new object[] { udtPropName }));
-
-            var fieldBuilder = proxyTypeDefinition.DefineField("_" + name, propertyType, FieldAttributes.Private);
-            var methodAttributes = MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig | MethodAttributes.Virtual;
-            var getMethodBuilder = proxyTypeDefinition.DefineMethod("get_" + name, methodAttributes, propertyType, Type.EmptyTypes);
-            var ilGenerator = getMethodBuilder.GetILGenerator();
-            ilGenerator.Emit(OpCodes.Ldarg_0);
-            ilGenerator.Emit(OpCodes.Ldfld, fieldBuilder);
-            ilGenerator.Emit(OpCodes.Ret);
-
-
-            var setMethodBuilder = proxyTypeDefinition.DefineMethod("set_" + name, methodAttributes, null, new Type[] { typeof(string) });
-            ilGenerator = setMethodBuilder.GetILGenerator();
-            ilGenerator.Emit(OpCodes.Ldarg_0);
-            ilGenerator.Emit(OpCodes.Ldarg_1);
-            ilGenerator.Emit(OpCodes.Stfld, fieldBuilder);
-            ilGenerator.Emit(OpCodes.Ret);
-
-            newProp.SetGetMethod(getMethodBuilder);
-            newProp.SetSetMethod(setMethodBuilder);
         }
     }
 }

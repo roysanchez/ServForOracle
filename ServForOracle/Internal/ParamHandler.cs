@@ -31,177 +31,6 @@ namespace ServForOracle.Internal
             = "The type {0} is not configured for automatic casting, please open an issue on github. "
                 + "In the mean time, you can use the OracleDbType Param create overload to solve it.";
 
-        /// <summary>
-        /// Automapper can't convert to generated types, in the meanwhile this will do
-        /// </summary>
-        /// <param name="value">The value to try an convert</param>
-        /// <param name="userType">The type of the <paramref name="value"/></param>
-        /// <returns>If its a proxy then returns the converted type otherwise is left as is</returns>
-        /// <seealso cref="ConvertToProxy(object, Type)"/>
-        private static object ConvertToProxy<T>(T value)
-        {
-            return ConvertToProxy(value, typeof(T));
-        }
-
-        /// <summary>
-        /// Automapper can't convert to generated types, in the meanwhile this will do
-        /// </summary>
-        /// <param name="value">The value to try an convert</param>
-        /// <param name="userType">The type of the <paramref name="value"/></param>
-        /// <returns>If its a proxy then returns the converted type otherwise is left as is</returns>
-        /// <seealso cref="ConvertToProxy{T}(T)"/>
-        private static object ConvertToProxy(object value, Type userType, Type proxyType = null)
-        {
-            if (value != null)
-            {
-                (Type ProxyType, string) proxy = (null, null);
-                if (proxyType != null || ProxyFactory.Proxies.TryGetValue(userType, out proxy))
-                {
-                    var type = proxyType ?? proxy.ProxyType;
-                    var instance = Activator.CreateInstance(type);
-
-                    foreach (var prop in type.GetProperties())
-                    {
-                        if(prop.Name == nameof(TypeFactory.Null))
-                        {
-                            continue;
-                        }
-
-                        var userProp = userType.GetProperty(prop.Name, prop.PropertyType);
-                        if (userProp != null)
-                        {
-                            //checks if the property has a proxy
-                            if (ProxyFactory.Proxies.ContainsKey(userProp.PropertyType) ||
-                                ProxyFactory.CollectionProxies.ContainsKey(userProp.PropertyType))
-                            {
-                                prop.SetValue(instance, ConvertToProxy(userProp.GetValue(value), userProp.PropertyType));
-                            }
-                            else
-                            {
-                                prop.SetValue(instance, userProp.GetValue(value));
-                            }
-                        }
-                    }
-
-                    return instance;
-                }
-                else if (
-                userType.IsCollection() &&
-                ProxyFactory.CollectionProxies.TryGetValue(userType.GetCollectionUnderType(), out var proxyCollection))
-                {
-                    var proxyUnderType = proxyCollection.ProxyCollectionType.GetCollectionUnderType();
-                    var listType = typeof(List<>).MakeGenericType(proxyUnderType);
-                    dynamic list = Activator.CreateInstance(listType);
-
-                    foreach (var v in value as IEnumerable)
-                    {
-                        list.Add(ConvertToProxy(v, userType.GetCollectionUnderType(), proxyUnderType));
-                    }
-
-                    return list;
-                }
-            }
-
-            return value;
-        }
-
-        /// <summary>
-        /// Looks for the user type from a proxy
-        /// </summary>
-        /// <param name="proxyType">The proxy type to check for</param>
-        /// <returns>The user type for the proxy if it exists</returns>
-        public static Type GetUserTypeFromProxyType(Type proxyType)
-        {
-            if (proxyType.IsCollection())
-            {
-                return ProxyFactory.CollectionProxies
-                    .FirstOrDefault(c => c.Value.ProxyCollectionType == proxyType)
-                    .Key;
-            }
-            else
-            {
-                return ProxyFactory.Proxies.First(c => c.Value.ProxyType == proxyType).Key;
-            }
-        }
-
-        /// <summary>
-        /// Convert from <paramref name="proxyType"/> to <paramref name="userType"/>
-        /// </summary>
-        /// <param name="value">The value to transform</param>
-        /// <param name="proxyType">The proxy <see cref="Type"/> of the value</param>
-        /// <param name="userType">The user <see cref="Type"/> to convert to</param>
-        /// <returns>The value transformed to the <paramref name="userType"/></returns>
-        private static object ConvertFromProxy(object value, Type proxyType, Type userType)
-        {
-            if (value != null)
-            {
-                if (ProxyFactory.Proxies.TryGetValue(userType, out var proxy) && proxy.ProxyType == proxyType)
-                {
-                    var instance = Activator.CreateInstance(userType);
-
-                    //properties of the proxy
-                    foreach (var prop in proxyType.GetProperties())
-                    {
-                        //if its the same type don't do anything else
-                        var userProp = userType.GetProperty(prop.Name, prop.PropertyType);
-                        if (userProp != null)
-                        {
-                            prop.SetValue(instance, userProp.GetValue(value));
-                        }
-                        else
-                        {
-                            //checks if the property is a proxy, if yes then recursively converts the value.
-                            var proxyPropUserType = GetUserTypeFromProxyType(prop.PropertyType);
-                            if (proxyPropUserType != null)
-                            {
-                                var proxyProperty = userType.GetProperty(prop.Name, proxyPropUserType);
-                                if (proxyProperty != null)
-                                {
-                                    prop.SetValue(instance, ConvertFromProxy(userProp.GetValue(value), prop.PropertyType,
-                                         userProp.PropertyType));
-                                }
-                            }
-                        }
-                    }
-
-                    return instance;
-                }
-                else if (
-                    proxyType.IsCollection() &&
-                    userType.IsCollection() &&
-                    ProxyFactory.CollectionProxies.TryGetValue(userType.GetCollectionUnderType(), out var proxyCollection) &&
-                    proxyCollection.ProxyCollectionType == proxyType
-                )
-                {
-
-                    var proxyUnderType = proxyType.GetCollectionUnderType();
-                    var userUnderType = userType.GetCollectionUnderType();
-                    var listType = typeof(List<>).MakeGenericType(userUnderType);
-                    dynamic list = Activator.CreateInstance(listType);
-
-                    foreach (var v in value as IEnumerable)
-                    {
-                        list.Add(ConvertFromProxy(v, proxyUnderType, userUnderType));
-                    }
-
-                    return list.ToArray();
-                }
-            }
-
-            return value;
-        }
-
-        /// <summary>
-        /// Converts from proxy types to userTypes
-        /// </summary>
-        /// <typeparam name="T">The expected user type</typeparam>
-        /// <param name="value">The value to transform</param>
-        /// <param name="proxyType">The proxy type of the value</param>
-        /// <returns>The value transformed to the <typeparamref name="T"/></returns>
-        private static T ConvertFromProxy<T>(object value, Type proxyType)
-        {
-            return (T)ConvertFromProxy(value, proxyType, typeof(T));//AutoMapper.Mapper.Map(value, proxyType, typeof(T));
-        }
 
         /// <summary>
         /// Checks if the <paramref name="type"/> is Assignable from any of the values in <see cref="ProxyFactory.CollectionProxies"/>
@@ -272,7 +101,7 @@ namespace ServForOracle.Internal
                     break;
             }
 
-            return CreateOracleParam(typeof(T), ConvertToProxy<T>(parameter.Value), paramDirection, parameter.OracleType);
+            return CreateOracleParam(typeof(T), ProxyFactory.ConvertToProxy<T>(parameter.Value), paramDirection, parameter.OracleType);
         }
 
         /// <summary>
@@ -450,7 +279,7 @@ namespace ServForOracle.Internal
             var type = oracleParam.Value.GetType();
 
             //This will handle Models.TypeModel and any other that don't require casting
-            if (ProxyFactory.Proxies.ContainsKey(type) || type == retType)
+            if (ProxyFactory.Proxies.ContainsKey(retType) || type == retType)
             {
                 //Check if property IsNull exists
                 var prop = type.GetProperty(nameof(TypeFactory.IsNull));
@@ -463,7 +292,7 @@ namespace ServForOracle.Internal
                     }
                 }
 
-                return ConvertFromProxy<T>(oracleParam.Value, type);
+                return ProxyFactory.ConvertFromProxy<T>(oracleParam.Value, type);
             }
             bool isNullable = (retType.IsGenericType && retType.GetGenericTypeDefinition() == typeof(Nullable<>));
 
@@ -541,7 +370,7 @@ namespace ServForOracle.Internal
                     if (ProxyFactory.CollectionProxies.TryGetValue(retType.GetCollectionUnderType(), out var proxyCollection))
                     {
                         var prop = type.GetProperty("Array");
-                        value = ConvertFromProxy<T>(prop.GetValue(oracleParam.Value), proxyCollection.ProxyCollectionType);
+                        value = ProxyFactory.ConvertFromProxy<T>(prop.GetValue(oracleParam.Value), proxyCollection.ProxyCollectionType);
                     }
                     else
                         throw new InvalidCastException($"Can't cast type {type.Name} to {retType.Name} " +

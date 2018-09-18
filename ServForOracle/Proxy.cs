@@ -123,5 +123,63 @@ namespace ServForOracle
 
             ProxyFactory.GetOrCreateProxyType(type, udtName);
         }
+
+        /// <summary>
+        /// Adds the specified type to the existing proxy for the <paramref name="udtName"/>
+        /// </summary>
+        /// <typeparam name="T">The type to register the existing proxy to</typeparam>
+        /// <param name="udtName">the udt name of the existing proxy</param>
+        /// <seealso cref="UseExistingCollectionProxyType{T}(string)"/>
+        /// <remarks>Doesn't check if the <typeparamref name="T"/> is similar</remarks>
+        public static void UseExistingProxyType<T>(string udtName)
+        {
+            UseExistingProxyType(typeof(T), udtName);
+        }
+
+        /// <summary>
+        /// Adds the specified type to the existing proxy for the <paramref name="udtName"/>
+        /// </summary>
+        /// <param name="userType">The type to register the existing proxy to</param>
+        /// <param name="udtName">the udt name of the existing proxy</param>
+        /// <seealso cref="UseExistingCollectionProxyType(Type, string)"/>
+        /// <remarks>Doesn't check if the <paramref name="userType"/> is similar</remarks>
+        public static void UseExistingProxyType(Type userType, string udtName)
+        {
+            if (string.IsNullOrWhiteSpace(udtName))
+            {
+                throw new ArgumentNullException(nameof(udtName));
+            }
+
+            ProxyFactory.AddTypeToExistingProxyType(userType, udtName);
+        }
+
+        /// <summary>
+        /// Adds the specified collection type to the existing proxy for the <paramref name="collectionUdtName"/>
+        /// </summary>
+        /// <typeparam name="T">The type to register the existing collection proxy to</typeparam>
+        /// <param name="collectionUdtName">the udt collecton name of the existing proxy</param>
+        /// <seealso cref="UseExistingProxyType{T}(string)"/>
+        /// <remarks>Doesn't check if the <typeparamref name="T"/> is similar</remarks>
+        public static void UseExistingCollectionProxyType<T>(string collectionUdtName)
+        {
+            UseExistingCollectionProxyType(typeof(T), collectionUdtName);
+        }
+
+        /// <summary>
+        /// Adds the specified collection type to the existing proxy for the <paramref name="collectionUdtName"/>
+        /// </summary>
+        /// <param name="userType">The type to register the existing collection proxy to</param>
+        /// <param name="collectionUdtName">the udt collecton name of the existing proxy</param>
+        /// <seealso cref="UseExistingProxyType(Type, string)"/>
+        /// <remarks>Doesn't check if the <paramref name="userType"/> is similar</remarks>
+        public static void UseExistingCollectionProxyType(Type userType, string collectionUdtName)
+        {
+            if (string.IsNullOrWhiteSpace(collectionUdtName))
+            {
+                throw new ArgumentNullException(nameof(collectionUdtName));
+            }
+
+            ProxyFactory.AddCollectionTypeToExistingProxyType(userType, collectionUdtName);
+        }
     }
 }
