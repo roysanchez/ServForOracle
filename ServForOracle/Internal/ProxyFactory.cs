@@ -41,7 +41,24 @@ namespace ServForOracle.Internal
         /// Used to check if the UDT type is registered
         /// </summary>
         private static HashSet<string> UDTLists;
-        
+
+        /// <summary>
+        /// Checks if the <paramref name="proxyType"/> is registered
+        /// </summary>
+        /// <param name="proxyType">The <see cref="Type"/> to check</param>
+        /// <returns>True if the <paramref name="proxyType"/> is registered as a proxy</returns>
+        public static bool IsValidProxyType(Type proxyType)
+        {
+            if (proxyType == null)
+            {
+                return false;
+            }
+
+            return Proxies.ContainsKey(proxyType) || (
+                proxyType.IsCollection() && CollectionProxies.ContainsKey(proxyType.GetCollectionUnderType())
+            );
+        }
+
         /// <summary>
         /// Maps an existing proxy to another user type
         /// </summary>
@@ -63,7 +80,7 @@ namespace ServForOracle.Internal
 
             var proxy = GetProxyTypeFromUdtName(udtName);
 
-            if(proxy != default)
+            if (proxy != default)
             {
                 Proxies.TryAdd(userType, proxy);
             }
@@ -103,7 +120,7 @@ namespace ServForOracle.Internal
         /// <param name="userType">The type of the <paramref name="value"/></param>
         /// <returns>If its a proxy then returns the converted type otherwise is left as is</returns>
         /// <seealso cref="ConvertToProxy(object, Type)"/>
-        internal static object ConvertToProxy<T>(T value)
+        internal static dynamic ConvertToProxy<T>(T value)
         {
             return ConvertToProxy(value, typeof(T));
         }
@@ -115,54 +132,86 @@ namespace ServForOracle.Internal
         /// <param name="userType">The type of the <paramref name="value"/></param>
         /// <returns>If its a proxy then returns the converted type otherwise is left as is</returns>
         /// <seealso cref="ConvertToProxy{T}(T)"/>
-        internal static object ConvertToProxy(object value, Type userType, Type proxyType = null)
+        internal static dynamic ConvertToProxy(dynamic value, Type userType, Type proxyOverrideType = null)
         {
-            if (value != null)
+            if (value != null && userType.IsAssignableFrom(value.GetType()))
             {
-                (Type ProxyType, string) proxy = (null, null);
-                if (proxyType != null || Proxies.TryGetValue(userType, out proxy))
-                {
-                    var type = proxyType ?? proxy.ProxyType;
-                    var instance = Activator.CreateInstance(type);
+                (Type proxyType, string) proxy = (null, null);
 
-                    foreach (var prop in type.GetProperties())
+                if (proxyOverrideType != null || Proxies.TryGetValue(userType, out proxy))
+                {
+                    var proxyType = proxyOverrideType ?? proxy.proxyType;
+                    var instance = Activator.CreateInstance(proxyType);
+
+                    //goes through the user type properties
+                    foreach (var prop in userType.GetProperties())
                     {
-                        if (prop.Name == nameof(TypeFactory.Null))
+                        if (prop.Name == nameof(TypeFactory.Null) || prop.Name == nameof(TypeFactory.IsNull))
                         {
                             continue;
                         }
 
-                        var userProp = userType.GetProperty(prop.Name, prop.PropertyType);
-                        if (userProp != null)
+                        //checks if the proxy property is the same type as the user property
+                        var proxyProp = proxyType.GetProperty(prop.Name, prop.PropertyType);
+                        if (proxyProp != null)
                         {
-                            //checks if the property has a proxy
-                            if (Proxies.ContainsKey(userProp.PropertyType) || CollectionProxies.ContainsKey(userProp.PropertyType))
+                            proxyProp.SetValue(instance, prop.GetValue(value));
+                        }
+                        else if (IsValidProxyType(prop.PropertyType))
+                        {
+                            var propProxyType = GetProxyTypeFromUserType(prop.PropertyType);
+                            proxyProp = proxyType.GetTypeOrCollectionProperty(prop.Name, propProxyType);
+
+                            if (proxyProp != null)
                             {
-                                prop.SetValue(instance, ConvertToProxy(userProp.GetValue(value), userProp.PropertyType));
+                                proxyProp.SetValue(instance, ConvertToProxy(prop.GetValue(value), prop.PropertyType, propProxyType));
                             }
                             else
                             {
-                                prop.SetValue(instance, userProp.GetValue(value));
+                                throw new Exception($"Error trying to convert the type {prop.PropertyType.Name} to {propProxyType.Name}"
+                                    + $", for the property {prop.Name} in the type {userType.Name}");
                             }
+                        }
+                        else
+                        {
+                            throw new Exception($"Error trying to convert the type {prop.PropertyType.Name}"
+                                    + $", for the property {prop.Name} in the type {userType.Name}");
                         }
                     }
 
                     return instance;
                 }
                 else if (
-                userType.IsCollection() &&
-                ProxyFactory.CollectionProxies.TryGetValue(userType.GetCollectionUnderType(), out var proxyCollection))
+                    userType.IsCollection()
+                    &&
+                    (proxyOverrideType != null ||
+                    CollectionProxies.TryGetValue(userType.GetCollectionUnderType(), out proxy)
+                   ))
                 {
-                    var proxyUnderType = proxyCollection.ProxyCollectionType.GetCollectionUnderType();
-                    var listType = typeof(List<>).MakeGenericType(proxyUnderType);
-                    dynamic list = Activator.CreateInstance(listType);
+                    var proxyType = proxyOverrideType ?? proxy.proxyType;
+                    var proxyUnderType = proxyType.GetCollectionUnderType();
+                    var userUnderType = userType.GetCollectionUnderType();
 
-                    foreach (var v in value as IEnumerable)
+                    //if it's the same type then just transform to the corresponding list
+                    if (proxyUnderType == userUnderType)
                     {
-                        list.Add(ConvertToProxy(v, userType.GetCollectionUnderType(), proxyUnderType));
+                        if (proxyType.IsArray)
+                            return Enumerable.ToArray(value);
+                        else
+                            return Enumerable.AsEnumerable(Enumerable.ToList(value));
                     }
+                    else
+                    {
+                        var listType = typeof(List<>).MakeGenericType(proxyUnderType);
+                        dynamic list = Activator.CreateInstance(listType);
 
-                    return list;
+                        foreach (var v in value as IEnumerable)
+                        {
+                            list.Add(ConvertToProxy(v, userUnderType, proxyUnderType));
+                        }
+
+                        return Enumerable.AsEnumerable(list);
+                    }
                 }
             }
 
@@ -188,11 +237,15 @@ namespace ServForOracle.Internal
         /// <param name="proxyType">The proxy <see cref="Type"/> of the value</param>
         /// <param name="userType">The user <see cref="Type"/> to convert to</param>
         /// <returns>The value transformed to the <paramref name="userType"/></returns>
-        internal static dynamic ConvertFromProxy(object value, Type proxyType, Type userType)
+        internal static dynamic ConvertFromProxy(dynamic value, Type proxyType, Type userType)
         {
             if (value != null)
             {
-                if (Proxies.TryGetValue(userType, out var proxy) && proxy.ProxyType == proxyType)
+                if (proxyType == userType)
+                {
+                    return value;
+                }
+                else if (Proxies.TryGetValue(userType, out var proxy) && proxy.ProxyType == proxyType)
                 {
                     var instance = Activator.CreateInstance(userType);
 
@@ -208,19 +261,26 @@ namespace ServForOracle.Internal
                         {
                             userProp.SetValue(instance, prop.GetValue(value));
                         }
+                        else if (IsValidProxyType(prop.PropertyType))
+                        {
+                            var userPropType = GetUserTypeFromProxyType(prop.PropertyType);
+                            userProp = userType.GetProperty(prop.Name, userPropType) ??
+                                userType.GetCollectionPropertyByUnderlyingType(prop.Name, userPropType);
+                            if (userProp != null)
+                            {
+                                userProp.SetValue(instance, ConvertFromProxy(prop.GetValue(value), prop.PropertyType,
+                                     userProp.PropertyType));
+                            }
+                            else
+                            {
+                                throw new Exception($"Error trying to convert the type {prop.PropertyType.Name} to {userPropType.Name}"
+                                    + $", for the property {prop.Name} in the type {userType.Name}");
+                            }
+                        }
                         else
                         {
-                            //checks if the property is a proxy, if yes then recursively converts the value.
-                            var proxyPropUserType = GetUserTypeFromProxyType(prop.PropertyType);
-                            if (proxyPropUserType != null)
-                            {
-                                var proxyProperty = userType.GetProperty(prop.Name, proxyPropUserType);
-                                if (proxyProperty != null)
-                                {
-                                    userProp.SetValue(instance, ConvertFromProxy(prop.GetValue(value), prop.PropertyType,
-                                         userProp.PropertyType));
-                                }
-                            }
+                            throw new Exception($"Error trying to convert the type {prop.PropertyType.Name}"
+                                    + $", for the property {prop.Name} in the type {userType.Name}");
                         }
                     }
 
@@ -236,15 +296,34 @@ namespace ServForOracle.Internal
 
                     var proxyUnderType = proxyType.GetCollectionUnderType();
                     var userUnderType = userType.GetCollectionUnderType();
-                    var listType = typeof(List<>).MakeGenericType(userUnderType);
-                    dynamic list = Activator.CreateInstance(listType);
-                    
-                    foreach (var v in value as IEnumerable)
-                    {
-                        list.Add(ConvertFromProxy(v, proxyUnderType, userUnderType));
-                    }
 
-                    return list.ToArray();
+                    //if the type is the same, then skip the convertion below
+                    if (proxyUnderType == userUnderType)
+                    {
+                        if (userType.IsArray)
+                            return Enumerable.ToArray(value);
+                        else
+                            return Enumerable.AsEnumerable(Enumerable.ToList(value));
+                    }
+                    else
+                    {
+                        var listType = typeof(List<>).MakeGenericType(userUnderType);
+                        dynamic list = Activator.CreateInstance(listType);
+
+                        foreach (var v in value as IEnumerable)
+                        {
+                            list.Add(ConvertFromProxy(v, proxyUnderType, userUnderType));
+                        }
+
+                        if (userType.IsArray)
+                        {
+                            return list.ToArray();
+                        }
+                        else
+                        {
+                            return Enumerable.AsEnumerable(list);
+                        }
+                    }
                 }
             }
 

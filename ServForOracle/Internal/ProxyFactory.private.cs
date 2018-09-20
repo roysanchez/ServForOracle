@@ -85,7 +85,27 @@ namespace ServForOracle.Internal
             }
             else
             {
-                return Proxies.First(c => c.Value.ProxyType == proxyType).Key;
+                return Proxies.FirstOrDefault(c => c.Value.ProxyType == proxyType).Key;
+            }
+        }
+
+        /// <summary>
+        /// Looks for the proxy type from a user type
+        /// </summary>
+        /// <param name="userType">The user type to check for</param>
+        /// <returns>The proxy type for the <paramref name="userType"/> if it exists</returns>
+        /// <remarks></remarks>
+        private static Type GetProxyTypeFromUserType(Type userType)
+        {
+            if (userType.IsCollection())
+            {
+                CollectionProxies.TryGetValue(userType, out var collection);
+                return collection.ProxyCollectionType;
+            }
+            else
+            {
+                Proxies.TryGetValue(userType, out var proxy);
+                return proxy.ProxyType;
             }
         }
 

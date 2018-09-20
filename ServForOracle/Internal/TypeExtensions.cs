@@ -2,6 +2,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -61,6 +62,57 @@ namespace ServForOracle.Internal
                 return ga.Single();
             else
                 return type.GetElementType();
+        }
+
+        /// <summary>
+        /// Looks for a property that is assignable to the <paramref name="assignableCollectionType"/> specified.
+        /// </summary>
+        /// <param name="type">The <see cref="Type"/> to check the properties on</param>
+        /// <param name="name">The name of the property</param>
+        /// <param name="assignableCollectionType">The <see cref="Type"/> to check if it is assignable to</param>
+        /// <returns>If found, the property with the assignable type</returns>
+        /// <remarks>This extension method checks if one of the properties is <see cref="Type.IsAssignableFrom(Type)"/>
+        /// from the <paramref name="assignableCollectionType"/> specified.
+        /// </remarks>
+        public static PropertyInfo GetCollectionProperty(this Type type, string name, Type assignableCollectionType)
+        {
+            return type.GetProperties()
+                .Where(c => c.Name == name && assignableCollectionType.IsAssignableFrom(c.PropertyType))
+                .FirstOrDefault();
+        }
+
+        /// <summary>
+        /// Looks for the property with the specified <paramref name="name"/> as well as checks if the property is a 
+        /// collection and its assignable with specified <paramref name="typeOrAssignable"/>
+        /// </summary>
+        /// <param name="type">The type to look the property into</param>
+        /// <param name="name">The name of the property to look</param>
+        /// <param name="typeOrAssignable">The type of the property or an assignable type of the property</param>
+        /// <returns>If it exists, the property with the specified <paramref name="typeOrAssignable"/></returns>
+        public static PropertyInfo GetTypeOrCollectionProperty(this Type type, string name, Type typeOrAssignable)
+        {
+            if (typeOrAssignable.IsCollection())
+            {
+                return type.GetCollectionProperty(name, typeOrAssignable);
+            }
+            else
+            {
+                return type.GetProperty(name, typeOrAssignable);
+            }
+        }
+
+        /// <summary>
+        /// Gets a collection property with the <paramref name="underlyingType"/>
+        /// </summary>
+        /// <param name="type">The type to look the property into</param>
+        /// <param name="name">The name of the property</param>
+        /// <param name="underlyingType">The underlying <see cref="Type"/> of the collection</param>
+        /// <returns>If it exists, the collection property with the <paramref name="underlyingType"/></returns>
+        public static PropertyInfo GetCollectionPropertyByUnderlyingType(this Type type, string name, Type underlyingType)
+        {
+            return type.GetProperties()
+                .Where(c => c.Name == name && c.PropertyType.GetCollectionUnderType() == underlyingType)
+                .FirstOrDefault();
         }
     }
 }
