@@ -1,4 +1,5 @@
-﻿using Oracle.DataAccess.Types;
+﻿using ConcurrentCollections;
+using Oracle.DataAccess.Types;
 using ServForOracle.Models;
 using ServForOracle.Tools;
 using System;
@@ -41,7 +42,7 @@ namespace ServForOracle.Internal
             ProxiesBeingWorked = new ConcurrentDictionary<Type, Type>();
             CollectionProxies = new ConcurrentDictionary<Type, (Type ProxyCollectionType, string UdtCollectionName)>();
 
-            UDTLists = new HashSet<string>();
+            UDTLists = new ConcurrentHashSet<string>();
 
             var executing = Assembly.GetExecutingAssembly();
 

@@ -1,4 +1,5 @@
-﻿using Oracle.DataAccess.Types;
+﻿using ConcurrentCollections;
+using Oracle.DataAccess.Types;
 using ServForOracle.Models;
 using System;
 using System.Collections;
@@ -40,7 +41,7 @@ namespace ServForOracle.Internal
         /// <summary>
         /// Used to check if the UDT type is registered
         /// </summary>
-        private static HashSet<string> UDTLists;
+        internal static ConcurrentHashSet<string> UDTLists;
 
         /// <summary>
         /// Checks if the <paramref name="proxyType"/> is registered
@@ -455,7 +456,8 @@ namespace ServForOracle.Internal
         /// <para>The generated proxy is a descendant of the <see cref="TypeModel"/> class.</para>
         /// </remarks>
         /// <seealso cref="GetOrCreateProxyCollectionType(Type, string)"/>
-        internal static Type GetOrCreateProxyType(Type userType, string overrideUdtName = null)
+        internal static Type GetOrCreateProxyType(Type userType, string overrideUdtName = null, 
+            Dictionary<string, string> replacedUdtPropertiesName = null)
         {
             if (userType == null)
                 return null;
@@ -466,6 +468,7 @@ namespace ServForOracle.Internal
             else if (ProxiesBeingWorked.TryGetValue(userType, out var workingProxyType))
                 return workingProxyType;
 
+            replacedUdtPropertiesName = replacedUdtPropertiesName ?? new Dictionary<string, string>();
             var udtName = overrideUdtName ?? GetUdtNameFromAttribute(userType);
 
             if (string.IsNullOrWhiteSpace(udtName))
@@ -501,8 +504,9 @@ namespace ServForOracle.Internal
                 {
                     continue;
                 }
-                
-                var udt = GetUdtPropertyNameFromAttribute(prop);
+
+                replacedUdtPropertiesName.TryGetValue(prop.Name, out var udt);
+                udt = udt ?? GetUdtPropertyNameFromAttribute(prop);
                 var propType = prop.PropertyType;
 
                 if (propType.IsValueType || prop.PropertyType == typeof(string))
