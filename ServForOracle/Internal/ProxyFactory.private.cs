@@ -270,5 +270,55 @@ namespace ServForOracle.Internal
             newProp.SetGetMethod(getMethodBuilder);
             newProp.SetSetMethod(setMethodBuilder);
         }
+
+        /// <summary>
+        /// Checks if the property is serializable, meaning it doesn't have any kind of attribute specifying otherwise
+        /// </summary>
+        /// <param name="property">The property to check</param>
+        /// <returns>True if it is serializable otherwise false</returns>
+        /// <remarks>It checks if the field exists and </remarks>
+        private static bool IsPropertySerializable(PropertyInfo property)
+        {
+            if (property == null)
+                return false;
+
+            if(MemberInfoHasInvalidAttribute(property))
+            {
+                return false;
+            }
+            
+            var typeFields = property.DeclaringType.GetFields(BindingFlags.NonPublic | BindingFlags.Instance);
+
+            var field = typeFields.FirstOrDefault(f => f.Name.Equals($"<{property.Name}>k__BackingField", StringComparison.InvariantCultureIgnoreCase)
+                                                  || f.Name.Equals($"{property.Name}Field", StringComparison.InvariantCultureIgnoreCase));
+
+            if (field != null)
+            {
+                return !MemberInfoHasInvalidAttribute(field);
+            }
+            
+            return false;
+        }
+
+        /// <summary>
+        /// Check if the MemberInfo has any of the following attributes: <see cref="NonSerializedAttribute"/>,
+        /// <see cref="System.Runtime.Serialization.IgnoreDataMemberAttribute"/> or 
+        /// <see cref="System.Xml.Serialization.XmlIgnoreAttribute"/>
+        /// </summary>
+        /// <param name="member">The field or property to check</param>
+        /// <returns>True if any of the attributes exists false otherwise</returns>
+        private static bool MemberInfoHasInvalidAttribute(MemberInfo member)
+        {
+            if (member.GetCustomAttribute<NonSerializedAttribute>() != null ||
+                    member.GetCustomAttribute<System.Runtime.Serialization.IgnoreDataMemberAttribute>() != null ||
+                    member.GetCustomAttribute<System.Xml.Serialization.XmlIgnoreAttribute>() != null)
+            {
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        }
     }
 }

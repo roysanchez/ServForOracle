@@ -143,10 +143,13 @@ namespace ServForOracle.Internal
                     var proxyType = proxyOverrideType ?? proxy.proxyType;
                     var instance = Activator.CreateInstance(proxyType);
 
+                    var proxyProperties = proxyType.GetProperties();
+
                     //goes through the user type properties
                     foreach (var prop in userType.GetProperties())
                     {
-                        if (prop.Name == nameof(TypeFactory.Null) || prop.Name == nameof(TypeFactory.IsNull))
+                        if (prop.Name == nameof(TypeFactory.Null) || prop.Name == nameof(TypeFactory.IsNull)
+                            || !proxyProperties.Any(p => p.Name == prop.Name))
                         {
                             continue;
                         }
@@ -492,12 +495,13 @@ namespace ServForOracle.Internal
 
             foreach (var prop in userType.GetProperties())
             {
-                //Skips the property if it is the Null property or if its been overriden by another one.
-                if (prop.Name == nameof(TypeFactory.Null) || overridenProperties.Any(c => c.Name == prop.Name && c != prop))
+                //Skips the property if it is the Null property, if its been overriden by another one or is not serializable.
+                if (prop.Name == nameof(TypeFactory.Null) || overridenProperties.Any(c => c.Name == prop.Name && c != prop)
+                    || !IsPropertySerializable(prop))
                 {
                     continue;
                 }
-
+                
                 var udt = GetUdtPropertyNameFromAttribute(prop);
                 var propType = prop.PropertyType;
 
