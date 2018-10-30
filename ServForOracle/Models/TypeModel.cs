@@ -1,5 +1,6 @@
 ﻿using Oracle.DataAccess.Client;
 using Oracle.DataAccess.Types;
+using ServForOracle.Internal;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -53,7 +54,15 @@ namespace ServForOracle.Models
         {
             ProcessProperties((prop, attr) =>
             {
-                prop.SetValue(this, OracleUdt.GetValue(con, pUdt, attr.AttributeName));
+                if (prop.PropertyType.IsCollection())
+                {
+                    dynamic collection = OracleUdt.GetValue(con, pUdt, attr.AttributeName);
+                    prop.SetValue(this, collection.Array);
+                }
+                else
+                {
+                    prop.SetValue(this, OracleUdt.GetValue(con, pUdt, attr.AttributeName));
+                }
             });
         }
     }

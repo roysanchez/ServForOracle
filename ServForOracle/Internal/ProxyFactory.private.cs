@@ -72,21 +72,29 @@ namespace ServForOracle.Internal
         }
 
         /// <summary>
-        /// Looks for the user type from a proxy
+        /// Looks for the property of the <paramref name="userType"/> that match the <paramref name="proxyPropertyType"/>
         /// </summary>
-        /// <param name="proxyType">The proxy type to check for</param>
-        /// <returns>The user type for the proxy if it exists</returns>
-        private static Type GetUserTypeFromProxyType(Type proxyType)
+        /// <param name="userType">The <see cref="Type"/> that declares the property</param>
+        /// <param name="proxyPropertyType">The <see cref="Type"/> of the property to look for</param>
+        /// <param name="propertyName">The name of the property in the <paramref name="userType"/></param>
+        /// <returns>The <see cref="PropertyInfo"/> for the property if exists otherwise null</returns>
+        private static PropertyInfo GetUserPropertyFromProxyPropertyType(Type userType, Type proxyPropertyType,
+            string propertyName)
         {
-            if (proxyType.IsCollection())
+            if (proxyPropertyType.IsCollection())
             {
                 return CollectionProxies
-                    .FirstOrDefault(c => c.Value.ProxyCollectionType == proxyType)
-                    .Key;
+                    .Where(c => c.Value.ProxyCollectionType == proxyPropertyType)
+                    .Select(c => userType.GetProperty(propertyName, c.Key.MakeArrayType()))
+                    .FirstOrDefault(prop => prop != null);
+
             }
             else
             {
-                return Proxies.FirstOrDefault(c => c.Value.ProxyType == proxyType).Key;
+                return Proxies
+                    .Where(c => c.Value.ProxyType == proxyPropertyType)
+                    .Select(c => userType.GetProperty(propertyName, c.Key))
+                    .FirstOrDefault(prop => prop != null);
             }
         }
 

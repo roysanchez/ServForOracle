@@ -44,20 +44,43 @@ namespace ServForOracle.Internal
         internal static ConcurrentHashSet<string> UDTLists;
 
         /// <summary>
-        /// Checks if the <paramref name="proxyType"/> is registered
+        /// Checks if the <paramref name="userType"/> is registered
         /// </summary>
-        /// <param name="proxyType">The <see cref="Type"/> to check</param>
-        /// <returns>True if the <paramref name="proxyType"/> is registered as a proxy</returns>
-        public static bool IsValidProxyType(Type proxyType)
+        /// <param name="userType">The <see cref="Type"/> to check</param>
+        /// <returns>True if the <paramref name="userType"/> is registered as a proxy</returns>
+        public static bool IsUserTypeRegistered(Type userType)
+        {
+            if (userType == null)
+            {
+                return false;
+            }
+
+            return Proxies.ContainsKey(userType) || (
+                userType.IsCollection() && CollectionProxies.ContainsKey(userType.GetCollectionUnderType())
+            );
+        }
+
+        /// <summary>
+        /// Looks for the user type from a proxy
+        /// </summary>
+        /// <param name="proxyType">The proxy type to check for</param>
+        /// <returns>The user type for the proxy if it exists</returns>
+        private static bool IsValidProxyType(Type proxyType)
         {
             if (proxyType == null)
             {
                 return false;
             }
 
-            return Proxies.ContainsKey(proxyType) || (
-                proxyType.IsCollection() && CollectionProxies.ContainsKey(proxyType.GetCollectionUnderType())
-            );
+            if (proxyType.IsCollection())
+            {
+                return CollectionProxies
+                    .Any(c => c.Value.ProxyCollectionType == proxyType);
+            }
+            else
+            {
+                return Proxies.Any(c => c.Value.ProxyType == proxyType);
+            }
         }
 
         /// <summary>
@@ -161,7 +184,7 @@ namespace ServForOracle.Internal
                         {
                             proxyProp.SetValue(instance, prop.GetValue(value));
                         }
-                        else if (IsValidProxyType(prop.PropertyType))
+                        else if (IsUserTypeRegistered(prop.PropertyType))
                         {
                             var propProxyType = GetProxyTypeFromUserType(prop.PropertyType);
                             proxyProp = proxyType.GetTypeOrCollectionProperty(prop.Name, propProxyType);
@@ -172,14 +195,14 @@ namespace ServForOracle.Internal
                             }
                             else
                             {
-                                throw new Exception($"Error trying to convert the type {prop.PropertyType.Name} to {propProxyType.Name}"
-                                    + $", for the property {prop.Name} in the type {userType.Name}");
+                                throw new Exception($"Error trying to convert the type {prop.PropertyType.FullName} to {propProxyType.FullName}"
+                                    + $", for the property {prop.Name} in the type {userType.FullName}");
                             }
                         }
                         else
                         {
-                            throw new Exception($"Error trying to convert the type {prop.PropertyType.Name}"
-                                    + $", for the property {prop.Name} in the type {userType.Name}");
+                            throw new Exception($"Error trying to convert the type {prop.PropertyType.FullName}"
+                                    + $", for the property {prop.Name} in the type {userType.FullName}");
                         }
                     }
 
@@ -267,9 +290,8 @@ namespace ServForOracle.Internal
                         }
                         else if (IsValidProxyType(prop.PropertyType))
                         {
-                            var userPropType = GetUserTypeFromProxyType(prop.PropertyType);
-                            userProp = userType.GetProperty(prop.Name, userPropType) ??
-                                userType.GetCollectionPropertyByUnderlyingType(prop.Name, userPropType);
+                            userProp = GetUserPropertyFromProxyPropertyType(userType, prop.PropertyType,
+                                prop.Name);
                             if (userProp != null)
                             {
                                 userProp.SetValue(instance, ConvertFromProxy(prop.GetValue(value), prop.PropertyType,
@@ -277,14 +299,15 @@ namespace ServForOracle.Internal
                             }
                             else
                             {
-                                throw new Exception($"Error trying to convert the type {prop.PropertyType.Name} to {userPropType.Name}"
-                                    + $", for the property {prop.Name} in the type {userType.Name}");
+                                throw new Exception($"Error trying to convert the type {prop.PropertyType.FullName}"
+                                    + $", for the property {prop.Name} in the type {userType.FullName}. "
+                                    + "Unable to find a proxy for the type.");
                             }
                         }
                         else
                         {
-                            throw new Exception($"Error trying to convert the type {prop.PropertyType.Name}"
-                                    + $", for the property {prop.Name} in the type {userType.Name}");
+                            throw new Exception($"Error trying to convert the type {prop.PropertyType.FullName}"
+                                    + $", for the property {prop.Name} in the type {userType.FullName}");
                         }
                     }
 
@@ -456,7 +479,7 @@ namespace ServForOracle.Internal
         /// <para>The generated proxy is a descendant of the <see cref="TypeModel"/> class.</para>
         /// </remarks>
         /// <seealso cref="GetOrCreateProxyCollectionType(Type, string)"/>
-        internal static Type GetOrCreateProxyType(Type userType, string overrideUdtName = null, 
+        internal static Type GetOrCreateProxyType(Type userType, string overrideUdtName = null,
             Dictionary<string, string> replacedUdtPropertiesName = null)
         {
             if (userType == null)
@@ -518,8 +541,8 @@ namespace ServForOracle.Internal
                     var collectionType = GetOrCreateProxyCollectionType(propType.GetCollectionUnderType());
                     if (collectionType == null)
                     {
-                        throw new ArgumentException($"The collection property {prop.Name}:{propType.Name} for the type {userType.Name}, must "
-                            + $"have the {nameof(UDTCollectionNameAttribute)} set in the {propType.GetCollectionUnderType()} class with the "
+                        throw new ArgumentException($"The collection property {prop.Name}:{propType.FullName} for the type {userType.FullName}, must "
+                            + $"have the {nameof(UDTCollectionNameAttribute)} set in the {propType.GetCollectionUnderType().FullName} class with the "
                             + "Oracle UDT collection name.");
                     }
                     AddProperty(proxyTypeDefinition, prop.Name, udt, collectionType, propAttrCtorInfo);

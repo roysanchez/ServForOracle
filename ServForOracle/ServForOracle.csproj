@@ -2,7 +2,7 @@
   <PropertyGroup>
     <TargetFramework>net461</TargetFramework>
     <PackageId>ServForOracle</PackageId>
-    <Version>8.1.0</Version>
+    <Version>8.1.2</Version>
     <Title>ServForOracle - Oracle Package and Type wrapper for .NET</Title>
     <PlatformTarget>AnyCPU</PlatformTarget>
     <Authors>Roy Sánchez</Authors>
@@ -11,7 +11,9 @@
     <Copyright>Copyright 2018 (c) Roy Sanchez. All rights reserved.</Copyright>
     <Platforms>AnyCPU;x64</Platforms>
     <PackageReleaseNotes>
-      Fixes issues when the replacedProperties are objects and changes the collection convertion to return an array instead of an enumarable as ODAC fails otherwise.
+      Fixes issue with the convertion of proxies to user types.
+      When the proxy type was reused through the Proxy class, it would fail when that proxy class was used as a property of another proxy, as it wouldn't know to which user type to convert to.
+      Shows more detailed exceptions.
     </PackageReleaseNotes>
     <RepositoryUrl>https://github.com/roysanchez/ServForOracle/</RepositoryUrl>
     <PackageProjectUrl>https://github.com/roysanchez/ServForOracle/</PackageProjectUrl>
