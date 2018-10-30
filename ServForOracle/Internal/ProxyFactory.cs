@@ -214,7 +214,7 @@ namespace ServForOracle.Internal
                             list.Add(ConvertToProxy(v, userUnderType, proxyUnderType));
                         }
 
-                        return Enumerable.AsEnumerable(list);
+                        return Enumerable.ToArray(list);
                     }
                 }
             }

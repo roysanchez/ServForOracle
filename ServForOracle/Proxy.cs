@@ -18,7 +18,16 @@ namespace ServForOracle
             (Expression<Func<T, object>> action, string newName)[] replacedPropertiesUdtNames)
         {
             return replacedPropertiesUdtNames.ToDictionary(
-                c => ((MemberExpression)c.action.Body).Member.Name,
+                c =>
+                {
+                    if (!(c.action.Body is MemberExpression memberExpression))
+                    {
+                        var unaryExpression = c.action.Body as UnaryExpression;
+                        memberExpression = unaryExpression.Operand as MemberExpression;
+                    }
+
+                    return memberExpression.Member.Name;
+                },
                 c => c.newName);
         }
         
