@@ -44,6 +44,13 @@ namespace ServForOracle.Internal
         internal static ConcurrentHashSet<string> UDTLists;
 
         /// <summary>
+        /// Used to get the generated proxy list type and get the value from oracle
+        /// TODO Clean the library up to streamline how it works, as its starting to get messy because of all the
+        /// different patches
+        /// </summary>
+        internal static ConcurrentDictionary<Type, Type> CollectionTypes { get; set; }
+
+        /// <summary>
         /// Checks if the <paramref name="userType"/> is registered
         /// </summary>
         /// <param name="userType">The <see cref="Type"/> to check</param>
@@ -162,10 +169,11 @@ namespace ServForOracle.Internal
             {
                 (Type proxyType, string) proxy = (null, null);
 
-                if (proxyOverrideType != null || Proxies.TryGetValue(userType, out proxy))
+                if ( !userType.IsCollection() &&
+                    (proxyOverrideType != null || Proxies.TryGetValue(userType, out proxy)))
                 {
                     var proxyType = proxyOverrideType ?? proxy.proxyType;
-                    var instance = Activator.CreateInstance(proxyType);
+                    object instance = proxyType.CreateInstance();
 
                     var proxyProperties = proxyType.GetProperties();
 
@@ -229,8 +237,7 @@ namespace ServForOracle.Internal
                     }
                     else
                     {
-                        var listType = typeof(List<>).MakeGenericType(proxyUnderType);
-                        dynamic list = Activator.CreateInstance(listType);
+                        dynamic list = proxyType.CreateInstance();
 
                         foreach (var v in value as IEnumerable)
                         {
@@ -274,7 +281,7 @@ namespace ServForOracle.Internal
                 }
                 else if (Proxies.TryGetValue(userType, out var proxy) && proxy.ProxyType == proxyType)
                 {
-                    var instance = Activator.CreateInstance(userType);
+                    var instance = userType.CreateInstance();
 
                     //properties of the proxy
                     foreach (var prop in proxyType.GetProperties())
@@ -334,8 +341,7 @@ namespace ServForOracle.Internal
                     }
                     else
                     {
-                        var listType = typeof(List<>).MakeGenericType(userUnderType);
-                        dynamic list = Activator.CreateInstance(listType);
+                        dynamic list = userType.CreateInstance();
 
                         foreach (var v in value as IEnumerable)
                         {
@@ -344,7 +350,7 @@ namespace ServForOracle.Internal
 
                         if (userType.IsArray)
                         {
-                            return list.ToArray();
+                            return Enumerable.ToArray(list);
                         }
                         else
                         {
@@ -437,11 +443,12 @@ namespace ServForOracle.Internal
             var setMethod = typeof(CollectionModel<>).GetProperty(nameof(TypeFactory.IsNull)).GetSetMethod();
 
             AddNullProperty(proxyTypeDefinition, AddConstructor(proxyTypeDefinition, genericConstructor), setMethod);
-            proxyTypeDefinition.CreateType();
+            var collectionType = proxyTypeDefinition.CreateType();
 
             var arrayProxy = typeof(IEnumerable<>).MakeGenericType(new Type[] { underlyingProxyType });
 
             CollectionProxies.GetOrAdd(underlyingUserType, (arrayProxy, udtCollectionName));
+            CollectionTypes.GetOrAdd(arrayProxy, collectionType);
 
             return arrayProxy;
         }

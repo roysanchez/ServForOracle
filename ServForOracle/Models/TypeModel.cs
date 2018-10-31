@@ -34,7 +34,7 @@ namespace ServForOracle.Models
             {
                 foreach (var attr in prop.GetCustomAttributes(false))
                 {
-                    if(attr is OracleObjectMappingAttribute)
+                    if (attr is OracleObjectMappingAttribute)
                     {
                         process(prop, attr as OracleObjectMappingAttribute);
                     }
@@ -46,7 +46,24 @@ namespace ServForOracle.Models
         {
             ProcessProperties((prop, attr) =>
             {
-                OracleUdt.SetValue(con, pUdt, attr.AttributeName, prop.GetValue(this));
+                if (prop.PropertyType.IsCollection())
+                {
+                    if (ProxyFactory.CollectionTypes.TryGetValue(prop.PropertyType, out var type))
+                    {
+                        dynamic list = type.CreateInstance();
+                        list.Array = (dynamic) prop.GetValue(this);
+                        OracleUdt.SetValue(con, pUdt, attr.AttributeName, list);
+                    }
+                    else
+                    {
+                        throw new Exception($"Can't find the type {prop.PropertyType.FullName}, when trying to"
+                            + " map to a collection");
+                    }
+                }
+                else
+                {
+                    OracleUdt.SetValue(con, pUdt, attr.AttributeName, prop.GetValue(this));
+                }
             });
         }
 

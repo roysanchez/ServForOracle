@@ -41,6 +41,7 @@ namespace ServForOracle.Internal
             Proxies = new ConcurrentDictionary<Type, (Type ProxyType, string UdtName)>();
             ProxiesBeingWorked = new ConcurrentDictionary<Type, Type>();
             CollectionProxies = new ConcurrentDictionary<Type, (Type ProxyCollectionType, string UdtCollectionName)>();
+            CollectionTypes = new ConcurrentDictionary<Type, Type>();
 
             UDTLists = new ConcurrentHashSet<string>();
 
@@ -108,7 +109,7 @@ namespace ServForOracle.Internal
         {
             if (userType.IsCollection())
             {
-                CollectionProxies.TryGetValue(userType, out var collection);
+                CollectionProxies.TryGetValue(userType.GetCollectionUnderType(), out var collection);
                 return collection.ProxyCollectionType;
             }
             else

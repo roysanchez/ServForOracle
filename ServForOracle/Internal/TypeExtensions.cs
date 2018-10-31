@@ -114,5 +114,20 @@ namespace ServForOracle.Internal
                 .Where(c => c.Name == name && c.PropertyType.GetCollectionUnderType() == underlyingType)
                 .FirstOrDefault();
         }
+
+        public static Type CreateListType(this Type proxyUnderType)
+        {
+            return typeof(List<>).MakeGenericType(proxyUnderType);
+        }
+
+
+        public static object CreateInstance(this Type proxyType)
+        {
+            if (proxyType.IsCollection())
+            {
+                return Activator.CreateInstance(proxyType.GetCollectionUnderType().CreateListType());
+            }
+            else return Activator.CreateInstance(proxyType);
+        }
     }
 }
