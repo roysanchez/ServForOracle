@@ -171,6 +171,10 @@ namespace ServForOracle.Internal
                 {
                     param.OracleDbType = OracleDbType.Date;
                 }
+                else if (type == typeof(bool) || type == typeof(bool?))
+                {
+                    param.OracleDbType = OracleDbType.Boolean;
+                }
                 else
                     throw new Exception(string.Format(TypeNotConfiguredMessage, type.Name));
             }
