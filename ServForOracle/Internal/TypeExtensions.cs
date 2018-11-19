@@ -13,6 +13,8 @@ namespace ServForOracle.Internal
     /// </summary>
     internal static class TypeExtensions
     {
+        private static readonly MethodInfo CastBase = typeof(TypeExtensions).GetMethod("PrivateCast", BindingFlags.Static | BindingFlags.NonPublic);
+
         /// <summary>
         /// Checks if the <paramref name="type"/> has the interface <see cref="IEnumerable"/>
         /// </summary>
@@ -20,7 +22,7 @@ namespace ServForOracle.Internal
         /// <returns>If the type has the <see cref="IEnumerable"/> interface it means that the type is a collection</returns>
         public static bool IsCollection(this Type type)
         {
-            return 
+            return
                 type.IsArray
                 ||
                 (type.IsInterface && type.IsGenericType && type.GetGenericTypeDefinition() == typeof(IEnumerable<>))
@@ -128,6 +130,19 @@ namespace ServForOracle.Internal
                 return Activator.CreateInstance(proxyType.GetCollectionUnderType().CreateListType());
             }
             else return Activator.CreateInstance(proxyType);
+        }
+
+        
+
+        private static T PrivateCast<T>(dynamic instance) where T : class
+        {
+            return instance as T;
+        }
+
+        public static dynamic CastToType(this Type type, dynamic instance)
+        {
+            var method = CastBase.MakeGenericMethod(type);
+            return method.Invoke(null, new[] { instance });
         }
     }
 }

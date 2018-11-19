@@ -23,7 +23,7 @@ namespace ServForOracle.Internal
         internal const string NAME = "servForOracleProxies";
 
         private static AssemblyName ProxiesAssemblyName = new AssemblyName(NAME);
-        private static AssemblyBuilder dynamicAssembly = AppDomain.CurrentDomain.DefineDynamicAssembly(ProxiesAssemblyName, AssemblyBuilderAccess.Run);
+        private static AssemblyBuilder dynamicAssembly = AssemblyBuilder.DefineDynamicAssembly(ProxiesAssemblyName, AssemblyBuilderAccess.Run);
         private static ModuleBuilder dynamicModule = dynamicAssembly.DefineDynamicModule(ProxiesAssemblyName.Name);
 
         /// <summary>

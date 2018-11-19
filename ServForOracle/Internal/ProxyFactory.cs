@@ -443,8 +443,8 @@ namespace ServForOracle.Internal
             var setMethod = typeof(CollectionModel<>).GetProperty(nameof(TypeFactory.IsNull)).GetSetMethod();
 
             AddNullProperty(proxyTypeDefinition, AddConstructor(proxyTypeDefinition, genericConstructor), setMethod);
-            var collectionType = proxyTypeDefinition.CreateType();
-
+            var collectionType = proxyTypeDefinition.CreateTypeInfo();
+            
             var arrayProxy = typeof(IEnumerable<>).MakeGenericType(new Type[] { underlyingProxyType });
 
             CollectionProxies.GetOrAdd(underlyingUserType, (arrayProxy, udtCollectionName));
@@ -561,7 +561,7 @@ namespace ServForOracle.Internal
             }
 
             AddNullProperty(proxyTypeDefinition, AddConstructor(proxyTypeDefinition));
-            var proxyType = proxyTypeDefinition.CreateType();
+            var proxyType = proxyTypeDefinition.CreateTypeInfo();
 
             Proxies.GetOrAdd(userType, (proxyType, udtName));
             ProxiesBeingWorked.TryRemove(userType, out _);

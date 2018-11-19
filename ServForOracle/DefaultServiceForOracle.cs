@@ -92,5 +92,8 @@ namespace ServForOracle
         /// <remarks>The OUT and IN OUT parameters get their values set by this method</remarks>
         public new void ExecuteProcedure(string procedure, params Param[] parameters) =>
             base.ExecuteProcedure(procedure, parameters);
+
+        public async new Task<T> ExecuteFunctionWithRefReturnAsync<T>(string function, params Param[] parameters) =>
+            await base.ExecuteFunctionWithRefReturnAsync<T>(function, parameters);
     }
 }

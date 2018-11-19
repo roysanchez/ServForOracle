@@ -41,7 +41,7 @@ namespace ServForOracle
             DbConnection = oracleConnection;
             connectionCreatedExternally = true;
         }
-        
+
         /// <summary>
         /// Oracle connection used to execute all the commands
         /// </summary>
@@ -166,7 +166,7 @@ namespace ServForOracle
             {
                 var ret = CreateReturnParameter<T>(cmd);
 
-                await ExecuteInnerAsync(cmd, parameters).ConfigureAwait(false);
+                await ExecuteInnerNonQueryAsync(cmd, parameters).ConfigureAwait(false);
                 try
                 {
                     return ParamHandler.ConvertOracleParameterToBaseType<T>(ret);
@@ -176,6 +176,76 @@ namespace ServForOracle
                     throw new Exception($"Error converting the return value to type {typeof(T).Name} " +
                         $"in function {function}. See inner exception for details", ex);
                 }
+            }
+        }
+
+        private string PrepareRefFunctionQuery(string function, int parametersLength)
+        {
+            var query = new StringBuilder($"select * from table({function}(");
+
+            for (int counter = 1; counter <= parametersLength; counter++)
+            {
+                query.Append($":{counter}");
+
+                if (counter < parametersLength)
+                {
+                    query.Append(",");
+                }
+            }
+
+            query.Append("))");
+
+            return query.ToString();
+        }
+
+        protected async Task<T> ExecuteFunctionWithRefReturnAsync<T>(string function, params Param[] parameters)
+        {
+            using (var cmd = await CreateCommandAndOpenConnectionAsync(function, CommandType.StoredProcedure).ConfigureAwait(false))
+            {
+                cmd.CommandType = CommandType.Text;
+                cmd.CommandText = PrepareRefFunctionQuery(function, parameters.Length);
+
+                var reader = await ExecuteInnerQueryAsync(cmd, parameters).ConfigureAwait(false);
+
+                var returnType = typeof(T);
+
+                if (returnType.IsCollection())
+                {
+                    var underlyingType = typeof(T).GetCollectionUnderType();
+                    dynamic ret = returnType.CreateInstance();
+
+                    while(reader.Read())
+                    {
+                        var oraRef = reader.GetOracleRef(0);
+                        if (!oraRef.IsNull)
+                        {
+                            var val = oraRef.GetCustomObject(OracleUdtFetchOption.Server);
+                            ret.Add(ProxyFactory.ConvertFromProxy(val, val.GetType(), underlyingType));
+                        }
+                    }
+
+                    if(returnType.IsArray)
+                    {
+                        return Enumerable.ToArray(ret);
+                    }
+                    else
+                    {
+                        return Enumerable.ToList(ret);
+                    }
+                }
+                else
+                {
+                    if(reader.Read())
+                    {
+                        var oraRef = reader.GetOracleRef(0);
+                        if (!oraRef.IsNull)
+                        {
+                            return returnType.CastToType(oraRef.GetCustomObject(OracleUdtFetchOption.Server));
+                        }
+                    }
+                }
+
+                throw new Exception("Couldn't read anything from the function.");
             }
         }
 
@@ -223,7 +293,7 @@ namespace ServForOracle
             {
                 try
                 {
-                    await ExecuteInnerAsync(cmd, parameters).ConfigureAwait(false);
+                    await ExecuteInnerNonQueryAsync(cmd, parameters).ConfigureAwait(false);
                 }
                 catch (Exception ex)
                 {
@@ -260,27 +330,47 @@ namespace ServForOracle
         /// <param name="parameters">The parameters to send</param>
         /// <returns>A Task indicating the status of the execution</returns>
         /// <remarks>Doesn't continue on the same context</remarks>
-        private async Task ExecuteInnerAsync(OracleCommand cmd, Param[] parameters)
+        private async Task ExecuteInnerNonQueryAsync(OracleCommand cmd, Param[] parameters)
+        {
+            await ExecuteInnerAsync(cmd, parameters, async () =>
+            {
+                await cmd.ExecuteNonQueryAsync().ConfigureAwait(false);
+            });
+        }
+
+        private async Task<OracleDataReader> ExecuteInnerQueryAsync(OracleCommand cmd, Param[] parameters)
+        {
+            OracleDataReader result = null;
+            await ExecuteInnerAsync(cmd, parameters, async () =>
+            {
+                result = (OracleDataReader)await cmd.ExecuteReaderAsync().ConfigureAwait(false);
+            });
+
+            return result;
+        }
+
+
+        private async Task ExecuteInnerAsync(OracleCommand cmd, Param[] parameters, Func<Task> execute)
         {
             var outParameters = new List<OutParam>();
             foreach (var param in parameters)
             {
                 var genericMethod = ConverterBase.MakeGenericMethod(param.Type);
                 var oracleParam = genericMethod.Invoke(null, new[] { param }) as OracleParameter;
-                
+
                 cmd.Parameters.Add(oracleParam);
 
                 if (oracleParam.Direction == ParameterDirection.Output || oracleParam.Direction == ParameterDirection.InputOutput)
                 {
                     var genericOutParam = typeof(OutParam<>).MakeGenericType(param.Type);
-                    
+
                     outParameters.Add(Activator.CreateInstance(genericOutParam, new object[] { param, oracleParam }) as OutParam);
                 }
             }
 
             try
             {
-                await cmd.ExecuteNonQueryAsync().ConfigureAwait(false);
+                await execute().ConfigureAwait(false);
             }
             catch (Exception ex)
             {
